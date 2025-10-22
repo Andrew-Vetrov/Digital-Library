@@ -1,5 +1,5 @@
 import psycopg2.extras
-from app.db import get_connection
+from db import get_connection
 
 class UserService:
     @staticmethod

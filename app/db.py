@@ -1,6 +1,6 @@
 import psycopg2
 import psycopg2.extras
-from app.config import Config
+from config import Config
 
 config = Config()
 

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session
 import hashlib
-from app.services.user_service import UserService
+from services.user_service import UserService
 
 auth_bp = Blueprint("auth", __name__)
 
