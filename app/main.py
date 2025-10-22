@@ -1,5 +1,6 @@
 from flask import Flask, render_template, session
 from routes.auth_routes import auth_bp
+from routes.file_routes import file_bp
 from db import init_db
 from config import Config
 
@@ -7,7 +8,7 @@ app = Flask(__name__)
 app.secret_key = Config().SECRET_KEY
 
 app.register_blueprint(auth_bp)
-
+app.register_blueprint(file_bp)
 @app.route("/", methods=["GET", "POST"])
 def index():
     d = {"authorized": 0, "username": None}
