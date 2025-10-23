@@ -1,5 +1,6 @@
 import psycopg2.extras
 from db import get_connection
+from db import User
 
 class UserService:
     @staticmethod
@@ -38,7 +39,8 @@ class UserService:
     @staticmethod
     def insert_user(username, email, password):
         query = "INSERT INTO users (username, email_hash, password_hash) VALUES (%s, %s, %s)"
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(query, (username, email, password))
-            conn.commit()
+        with get_connection() as session:
+            newUser = User(username, email, password)
+            session.add(newUser)
+            session.commit()
+                
