@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session
 import hashlib
 from services.user_service import UserService
-
+import sys
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/authorization", methods=["GET", "POST"])
@@ -11,14 +11,16 @@ def authorization():
 
     data = dict(request.form)
 
-    email = hashlib.sha256(data["email"].encode()).hexdigest()
+    email = data["email"]
     password = hashlib.sha256(data["password"].encode()).hexdigest()
 
-    result = UserService.find_by_credentials(email, password)
+    result = UserService.find_by_email(email, password)
     d = {"result_of_authorization": 1}
 
+    print(result, file=sys.stderr)
+    
     if result:
-        session["authorized"] = result[0]["username"]
+        session["authorized"] = result[0].username
     else:
         result_password = UserService.find_password_by_email(email)
         if result_password and result_password != password:
@@ -36,7 +38,7 @@ def registration():
 
     data = dict(request.form)
     username = data["username"]
-    email = hashlib.sha256(data["email"].encode()).hexdigest()
+    email = data["email"]
     password = hashlib.sha256(data["password"].encode()).hexdigest()
 
     username_ok = UserService.username_available(username)

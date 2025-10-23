@@ -18,6 +18,11 @@ class User(Base):
     email = Column(String(64), nullable = False, unique = True)
     password_hash = Column(String(256), nullable = False)
 
+    def __init__(self, username, email, password_hash):
+        self.username = username
+        self.email = email
+        self.password_hash = password_hash
+
 def get_connection():
     return Session(autoflush=False, bind=engine)
 
