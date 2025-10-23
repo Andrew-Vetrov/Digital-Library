@@ -3,7 +3,9 @@ import psycopg2.extras
 from config import Config
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from sqlalchemy import Column, Integer, String, create_engine
+import sys
 config = Config()
+print(config.DATABASE_URL, file=sys.stderr)
 
 engine = create_engine(config.DATABASE_URL)
 
@@ -28,7 +30,6 @@ def init_db():
     #     password_hash VARCHAR(128) NOT NULL
     # );
     # """
-    
     Base.metadata.create_all(bind=engine)
     # with get_connection() as conn:
     #     with conn.cursor() as cur:
