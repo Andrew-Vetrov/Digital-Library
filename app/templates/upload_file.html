@@ -13,7 +13,7 @@
 </head>
 
 <body>
-    <form action="#" method="POST" enctype="multipart/form-data" id="uploadForm">
+    <form action="/upload_file" method="POST" enctype="multipart/form-data" id="uploadForm">
   <div>
     <input type="file" id="file" name="file" multiple onchange="submitForm()" />
   </div>
@@ -28,6 +28,8 @@ function submitForm() {
     document.getElementById('uploadForm').submit();
 }
 </script>
+
+ <a href="/files">Посмотреть все файлы</a>
 
 </body>
 

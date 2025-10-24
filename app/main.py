@@ -15,8 +15,11 @@ def index():
     if "authorized" in session:
         d["authorized"] = 1
         d["username"] = session["authorized"]
+    
     return render_template("index.html", **d)
+
+
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=3000)
+    app.run(host="0.0.0.0", port=3000, debug=True)

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session
+from flask import Blueprint, render_template, request, session, redirect, url_for
 import hashlib
 from services.user_service import UserService
 import sys
@@ -55,3 +55,11 @@ def registration():
         error_dict["wrong_email"] = 1
 
     return render_template("registration.html", **error_dict)
+
+@auth_bp.route("/sign_out")
+def sign_out():
+    try:
+        del session["authorized"]
+    except Exception as ex:
+        print(ex)
+    return redirect(url_for("index"))

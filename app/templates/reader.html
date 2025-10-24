@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Читалка: {{ filename }}</title>
+</head>
+<body>
+  <h2>{{ filename }}</h2>
+
+  <!-- Вставляем EPUB.js или просто даём ссылку для скачивания -->
+  <p><a href="{{ book_url }}" target="_blank">Открыть книгу</a></p>
+
+  <a href="{{ url_for('file.list_files') }}">Назад</a>
+</body>
+</html>

@@ -1,42 +1,16 @@
-import psycopg2
-import psycopg2.extras
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import create_engine
 from config import Config
-from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
-from sqlalchemy import Column, Integer, String, create_engine
-import sys
+
 config = Config()
-print(config.DATABASE_URL, file=sys.stderr)
 
 engine = create_engine(config.DATABASE_URL)
-
-class Base(DeclarativeBase) : pass
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key = True)
-    username = Column(String(64), nullable = False, unique = True)
-    email = Column(String(64), nullable = False, unique = True)
-    password_hash = Column(String(256), nullable = False)
-
-    def __init__(self, username, email, password_hash):
-        self.username = username
-        self.email = email
-        self.password_hash = password_hash
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 def get_connection():
-    return Session(autoflush=False, bind=engine)
+    return SessionLocal()
+
 
 def init_db():
-    # query = """
-    # CREATE TABLE IF NOT EXISTS users (
-    #     id SERIAL PRIMARY KEY,
-    #     username VARCHAR(64) UNIQUE NOT NULL,
-    #     email_hash VARCHAR(128) UNIQUE NOT NULL,
-    #     password_hash VARCHAR(128) NOT NULL
-    # );
-    # """
     Base.metadata.create_all(bind=engine)
-    # with get_connection() as conn:
-    #     with conn.cursor() as cur:
-    #         cur.execute(query)
-    #     conn.commit()

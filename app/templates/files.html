@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Книги MinIO</title>
+</head>
+<body>
+  <h2>Книги в библиотеке</h2>
+
+  <ul>
+    {% for f in files %}
+      <li><a href="{{ url_for('file.read_book', filename=f) }}">{{ f }}</a></li>
+    {% else %}
+      <li>Нет книг</li>
+    {% endfor %}
+  </ul>
+
+  <a href="/upload_file">Назад</a>
+</body>
+</html>
