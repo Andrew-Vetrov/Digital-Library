@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, Response
 import os
 from minio import Minio
+from flask import Blueprint, redirect, url_for, session, abort, flash
 from services.book_service import BookService  # 👈 подключаем сервис
 from minio.error import S3Error
 from datetime import timedelta
@@ -44,6 +45,20 @@ def upload_file():
         except Exception as e:
             return render_template("upload_file.html", message=f"Ошибка при загрузке: {e}")
 
+@file_bp.route("/delete/<int:book_id>", methods=["POST"])
+def delete_book(book_id):
+    user_authorized = session.get("authorized", 0) # это задел на более менее какое-то упраление книгами, 
+                                     # ща кто-угодно может удалять, но это изи фиксится
+    if not user_authorized:
+        abort(403, "Вы не авторизованы")
+
+    # 🧠 Проверяем, что это админ
+    if not user_authorized:
+        abort(403, "Доступ запрещён")
+
+    BookService.delete_book(book_id)
+    flash("Книга успешно удалена!", "success")
+    return redirect(url_for("file.list_files"))
 
 @file_bp.route("/files", methods=["GET"])
 def list_files():

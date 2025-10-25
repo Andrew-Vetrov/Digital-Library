@@ -48,6 +48,36 @@ class BookService:
             return metadata["title"]
 
     @staticmethod
+    def delete_book(book_id):
+        from flask import abort
+
+        minio = Minio(
+            os.getenv("MINIO_ENDPOINT", "minio:9000"),
+            access_key=os.getenv("MINIO_ROOT_USER"),
+            secret_key=os.getenv("MINIO_ROOT_PASSWORD"),
+            secure=False
+        )
+
+        bucket = os.getenv("BUCKET_NAME", "books")
+
+        with get_connection() as session:
+            book = session.query(Book).get(book_id)
+            if not book:
+                abort(404, "Книга не найдена")
+            try:
+                if book.minio_key:
+                    minio.remove_object(bucket, book.minio_key)
+                if book.cover_key:
+                    minio.remove_object(bucket, book.cover_key)
+            except Exception as e:
+                print("Ошибка удаления из MinIO:", e)
+
+            session.delete(book)
+            session.commit()
+
+            return True
+
+    @staticmethod
     def find_books(query=None):
         with get_connection() as session:
             q = session.query(Book)
