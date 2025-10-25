@@ -12,11 +12,10 @@ class Book(Base):
     minio_key = Column(String(255), nullable=False)
     cover_key = Column(String(255))
 
-    def __init__(self, title, author, language, description, genre, minio_key, cover_key=None):
+    def __init__(self, title, author, language, genre, minio_key, cover_key=None):
         self.title = title
         self.author = author
         self.language = language
-        self.description = description
         self.genre = genre
         self.minio_key = minio_key
         self.cover_key = cover_key

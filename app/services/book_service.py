@@ -53,6 +53,17 @@ class BookService:
             q = session.query(Book)
             if query:
                 q = q.filter(Book.title.ilike(f"%{query}%") | Book.author.ilike(f"%{query}%"))
-                print("Books in DB:", q.count())
-                
-            return q.all()
+
+            books = q.all()
+
+            bucket = os.getenv("BUCKET_NAME", "books")
+            public_url = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
+
+            # добавляем ссылку на обложку
+            for b in books:
+                if b.cover_key:
+                    b.cover_url = f"{public_url}/{bucket}/{b.cover_key}"
+                else:
+                    b.cover_url = "https://via.placeholder.com/160x220?text=No+Cover"
+
+            return books

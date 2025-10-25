@@ -1,9 +1,12 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, Response
 import os
 from minio import Minio
 from services.book_service import BookService  # 👈 подключаем сервис
 from minio.error import S3Error
 from datetime import timedelta
+from models.book import Book
+from db import get_connection
+
 
 file_bp = Blueprint("file", __name__)
 
@@ -42,20 +45,21 @@ def upload_file():
             return render_template("upload_file.html", message=f"Ошибка при загрузке: {e}")
 
 
-@file_bp.route("/files", methods=["POST", "GET"])
+@file_bp.route("/files", methods=["GET"])
 def list_files():
+    PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
     try:
-        if not minio_client.bucket_exists(BUCKET_NAME):
-            return render_template("upload_file.html", message="Бакет пуст или не существует")
+        books = BookService.find_books()
+        for book in books:
+            if book.cover_key:
+                book.cover_url = f"{PUBLIC_ENDPOINT}/{BUCKET_NAME}/{book.cover_key}"
+            else:
+                book.cover_url = None
 
-        objects = minio_client.list_objects(BUCKET_NAME, recursive=True)
-        files = [obj.object_name for obj in objects if not obj.object_name.startswith("covers/")]
-
-        return render_template("files.html", files=files)
-
-    except S3Error as e:
-        return render_template("upload_file.html", message=f"Ошибка MinIO: {e}")
-
+        return render_template("files.html", books=books)
+    except Exception as e:
+        return render_template("upload_file.html", message=f"Ошибка при загрузке списка книг: {e}")
+    
 @file_bp.route("/reader/<filename>")
 def read_book(filename):
     try:
@@ -69,3 +73,15 @@ def read_book(filename):
 
     except S3Error as e:
         return f"Ошибка при открытии книги: {e}"
+    
+@file_bp.route("/cover/<int:book_id>")
+def serve_cover(book_id):
+    from io import BytesIO
+    from flask import send_file
+
+    with get_connection() as session:
+        book = session.query(Book).get(book_id)
+        if not book or not book.cover_key:
+            return "Нет обложки", 404
+    data = minio_client.get_object("librarybucket", book.cover_key).read()
+    return send_file(BytesIO(data), mimetype="image/jpeg")
