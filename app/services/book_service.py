@@ -97,3 +97,11 @@ class BookService:
                     b.cover_url = "https://via.placeholder.com/160x220?text=No+Cover"
 
             return books
+
+
+    @staticmethod
+    def find_book_by_id(book_id):
+        with get_connection() as session:
+            q = session.query(Book).filter(Book.id == book_id).first()
+            return q
+            

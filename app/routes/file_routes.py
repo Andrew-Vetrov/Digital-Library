@@ -7,8 +7,7 @@ from minio.error import S3Error
 from datetime import timedelta
 from models.book import Book
 from db import get_connection
-
-
+import sys
 file_bp = Blueprint("file", __name__)
 
 minio_client = Minio(
@@ -18,7 +17,39 @@ minio_client = Minio(
     secure=False
 )
 
-BUCKET_NAME = os.getenv("MINIO_BUCKET", "librarybucket")
+
+BUCKET_NAME = os.getenv("BUCKET_NAME", "librarybucket")
+
+policy = f'''
+{{
+    "Version": "2012-10-17",
+    "Statement": [
+        {{
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": ["s3:GetObject"],
+            "Resource": ["arn:aws:s3:::{BUCKET_NAME}/*"]
+        }}
+    ]
+}}
+'''
+
+minio_client.set_bucket_policy(BUCKET_NAME, policy)
+
+cors_config = """"
+{
+    "CORSRules": [
+        {
+            "AllowedHeaders": ["*"],
+            "AllowedMethods": ["GET", "HEAD"],
+            "AllowedOrigins": ["*"],
+            "ExposeHeaders": ["ETag"],
+            "MaxAgeSeconds": 3000
+        }
+    ]
+}
+"""
+#minio_client.set_bucket_cors("librarybucket", cors_config)
 
 @file_bp.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
@@ -75,16 +106,19 @@ def list_files():
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка при загрузке списка книг: {e}")
     
-@file_bp.route("/reader/<filename>")
-def read_book(filename):
+@file_bp.route("/reader/<int:id>", methods=["GET"])
+def read_book(id):
     try:
-        url = minio_client.get_presigned_url(
-            "GET",
-            BUCKET_NAME,
-            filename,
-            expires=timedelta(hours=1)
-        )
-        return render_template("reader.html", book_url=url, filename=filename)
+        print(id, file=sys.stderr)
+        boo = BookService.find_book_by_id(id)
+
+        obj_name = boo.minio_key
+        print(obj_name, file=sys.stderr)
+
+        MINIO_DOMAIN = os.getenv("MINIO_DOMAIN")
+        external_url = f"{MINIO_DOMAIN}/{BUCKET_NAME}/{obj_name}"
+        print("URL = ", external_url, file=sys.stderr)   
+        return render_template("reader.html", book_url=external_url, id=id)
 
     except S3Error as e:
         return f"Ошибка при открытии книги: {e}"

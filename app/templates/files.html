@@ -50,7 +50,7 @@
                 {% if book.description %}
                   <p class="small text-secondary">{{ book.description[:100] }}{% if book.description|length > 100 %}...{% endif %}</p>
                 {% endif %}
-                <a href="/read/{{ book.id }}" class="btn btn-primary">Читать</a>
+                <a href="/reader/{{ book.id }}" class="btn btn-primary">Читать</a>
                  {% if session.authorized %}
                   <form action="/delete/{{ book.id }}" method="POST" style="display:inline;">
                     <button type="submit" class="btn btn-danger">Удалить</button>
