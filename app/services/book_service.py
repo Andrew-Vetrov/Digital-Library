@@ -11,7 +11,10 @@ class BookService:
         file_storage.save(temp_path)
 
         parser = EPUBParser(temp_path)
+        # тут надо аккуратно глянуть, потому что сейчас у нас весь текст в метадате
         metadata = parser.extract_metadata()
+        print("Genre\n",metadata["genre"])
+
 
         minio = Minio(
             os.getenv("MINIO_ENDPOINT", "minio:9000"),
@@ -78,18 +81,13 @@ class BookService:
             return True
 
     @staticmethod
-    def find_books(query=None):
+    def find_books():
         with get_connection() as session:
-            q = session.query(Book)
-            if query:
-                q = q.filter(Book.title.ilike(f"%{query}%") | Book.author.ilike(f"%{query}%"))
-
-            books = q.all()
+            books = session.query(Book).all()
 
             bucket = os.getenv("BUCKET_NAME", "books")
             public_url = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
 
-            # добавляем ссылку на обложку
             for b in books:
                 if b.cover_key:
                     b.cover_url = f"{public_url}/{bucket}/{b.cover_key}"

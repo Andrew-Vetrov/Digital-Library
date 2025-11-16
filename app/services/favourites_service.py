@@ -17,7 +17,6 @@ class FavoriteService:
 
     @staticmethod
     def is_favourite(user_id, book_id):
-        """Проверяем, есть ли книга в избранном"""
         with get_connection() as session:
             fav = (
                 session.query(Favourite)
@@ -31,16 +30,13 @@ class FavoriteService:
 
     @staticmethod
     def add_favorite(user_id, book_id):
-        """Добавление книги в избранное"""
         with get_connection() as session:
-            # Проверяем, существует ли пользователь и книга
             user = session.query(User).get(user_id)
             book = session.query(Book).get(book_id)
 
             if not user or not book:
                 return False
 
-            # Проверяем, нет ли уже записи
             existing = (
                 session.query(Favourite)
                 .filter(
@@ -51,9 +47,8 @@ class FavoriteService:
             )
 
             if existing:
-                return True  # уже в избранных — ок
+                return True
 
-            # Добавляем
             fav = Favourite(user_id=user_id, book_id=book_id)
             session.add(fav)
             session.commit()
@@ -61,7 +56,6 @@ class FavoriteService:
 
     @staticmethod
     def remove_favorite(user_id, book_id):
-        """Удаление книги из избранных"""
         with get_connection() as session:
             fav = (
                 session.query(Favourite)

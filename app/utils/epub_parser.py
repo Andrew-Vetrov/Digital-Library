@@ -12,6 +12,7 @@ class EPUBParser:
             "author": self._get_meta('DC', 'creator'),
             "language": self._get_meta('DC', 'language'),
             "description": self._get_meta('DC', 'description'),
+            "genre": self._get_meta('DC', 'genre'),
             "cover_image": self._extract_cover(),
             "content": self._extract_text()
         }

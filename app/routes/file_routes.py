@@ -44,7 +44,6 @@ def ensure_bucket_exists():
     except Exception as e:
         print(f"Ошибка при создании бакета: {e}")
 
-# Вызываем при инициализации
 ensure_bucket_exists()
 
 minio_client.set_bucket_policy(BUCKET_NAME, policy)
@@ -95,7 +94,6 @@ def delete_book(book_id):
     if not user_authorized:
         abort(403, "Вы не авторизованы")
 
-    # 🧠 Проверяем, что это админ
     if not user_authorized:
         abort(403, "Доступ запрещён")
 
@@ -106,18 +104,47 @@ def delete_book(book_id):
 @file_bp.route("/files", methods=["GET"])
 def list_files():
     PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
+
+    # Читаем параметры фильтров
+    author = request.args.get("author")
+    publisher = request.args.get("publisher")
+    genre = request.args.get("genre")
+
     try:
         books = BookService.find_books()
+
+        # ---- ФИЛЬТРАЦИЯ ----
+        if author:
+            books = [b for b in books if author.lower() in b.author.lower()]
+
+        if publisher:
+            books = [b for b in books if b.publisher and publisher.lower() in b.publisher.lower()]
+
+        if genre:
+            books = [b for b in books if b.genre == genre]
+
+        # Подготовка ссылок на обложки
         for book in books:
-            if book.cover_key:
+            if getattr(book, "cover_key", None):
                 book.cover_url = f"{PUBLIC_ENDPOINT}/{BUCKET_NAME}/{book.cover_key}"
             else:
                 book.cover_url = None
 
-        return render_template("files.html", books=books)
+        all_books = BookService.find_books()
+        
+        print(all_books[0].genre)
+        genres = sorted({b.genre for b in all_books if b.genre})
+        print("\n\nGENRES", genres, "\n\n\n")
+        return render_template(
+            "files.html",
+            books=books,
+            genres=genres,
+            request=request
+        )
+
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка при загрузке списка книг: {e}")
-    
+
 @file_bp.route("/reader/<int:id>", methods=["GET"])
 def read_book(id):
     try:
