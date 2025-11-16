@@ -21,6 +21,7 @@ def authorization():
     
     if result:
         session["authorized"] = result[0].username
+        session["user_id"] = result[0].id
     else:
         result_password = UserService.find_password_by_email(email)
         if result_password and result_password != password:
@@ -49,6 +50,8 @@ def registration():
     if username_ok and email_ok:
         UserService.insert_user(username, email, password)
         session["authorized"] = username
+        result = UserService.find_by_email(email, password)
+        session["user_id"] = result[0].id
     if not username_ok:
         error_dict["wrong_username"] = 1
     if not email_ok:

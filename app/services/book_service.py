@@ -1,7 +1,7 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.book import Book
+from models.models import Book
 from db import get_connection
 
 class BookService:

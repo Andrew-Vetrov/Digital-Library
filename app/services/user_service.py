@@ -1,6 +1,6 @@
 import psycopg2.extras
 from db import get_connection
-from models.user import User
+from models.models import User
 
 class UserService:
     @staticmethod

@@ -29,45 +29,48 @@
 <body class="p-4">
 
 <header class="bg-dark">
-        <div class="container-fluid d-flex">
-                <a href="/" class="btn btn-primary" >На главную</a>
-            
-        </div>
-    </header>
-
-  <div class="container">
-    <h2 class="mb-4 text-center">📚 Моя библиотека</h2>
-
-    {% if books %}
-      <div class="row">
-        {% for book in books %}
-          <div class="col-md-4 mb-4">
-            <div class="card book-card p-3 text-center">
-               <img src="/cover/{{ book.id }}" class="book-cover mx-auto d-block" alt="Обложка">
-              <div class="card-body">
-                <h5 class="card-title mt-2">{{ book.title }}</h5>
-                <p class="text-muted mb-1">{{ book.author }}</p>
-                {% if book.description %}
-                  <p class="small text-secondary">{{ book.description[:100] }}{% if book.description|length > 100 %}...{% endif %}</p>
-                {% endif %}
-                <a href="/reader/{{ book.id }}" class="btn btn-primary">Читать</a>
-                 {% if session.authorized %}
-                  <form action="/delete/{{ book.id }}" method="POST" style="display:inline;">
-                    <button type="submit" class="btn btn-danger">Удалить</button>
-                  </form>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="text-center text-muted">Пока нет загруженных книг.</p>
-    {% endif %}
-
-    <div class="text-center mt-4">
-      <a href="/upload_file" class="btn btn-secondary">⬅ Назад</a>
-    </div>
+  <div class="container-fluid d-flex">
+    <a href="/" class="btn btn-primary">На главную</a>
   </div>
+</header>
+
+<div class="container">
+  <h2 class="mb-4 text-center">📚 Моя библиотека</h2>
+
+  {% if books %}
+  <div class="row">
+    {% for book in books %}
+      <div class="col-md-4 mb-4">
+        <div class="card book-card p-2 text-center">
+          <img src="/cover/{{ book.id }}" class="book-cover" alt="Обложка">
+          <div class="card-body">
+            <h5 class="card-title mt-2">{{ book.title }}</h5>
+            <p class="text-muted mb-1">{{ book.author }}</p>
+
+            {% if book.description %}
+            <p class="small text-secondary">{{ book.description[:100] }}{% if book.description|length > 100 %}...{% endif %}</p>
+            {% endif %}
+
+            <a href="/reader/{{ book.id }}" class="btn btn-primary">Читать</a>
+
+            {% if session.authorized %}
+              <form action="/favorite/{{ book.id }}" method="POST" style="display:inline;">
+                <button class="btn btn-warning">В избранное ⭐</button>
+              </form>
+
+              <form action="/delete/{{ book.id }}" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-danger">Удалить</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-center text-muted">Пока нет загруженных книг.</p>
+  {% endif %}
+</div>
+
 </body>
 </html>

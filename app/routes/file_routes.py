@@ -2,10 +2,10 @@ from flask import Blueprint, render_template, request, Response
 import os
 from minio import Minio
 from flask import Blueprint, redirect, url_for, session, abort, flash
-from services.book_service import BookService  # 👈 подключаем сервис
+from services.book_service import BookService
 from minio.error import S3Error
 from datetime import timedelta
-from models.book import Book
+from models.models import Book
 from db import get_connection
 import sys
 file_bp = Blueprint("file", __name__)
@@ -34,6 +34,19 @@ policy = f'''
 }}
 '''
 
+def ensure_bucket_exists():
+    try:
+        if not minio_client.bucket_exists(BUCKET_NAME):
+            minio_client.make_bucket(BUCKET_NAME)
+            print(f"Бакет {BUCKET_NAME} создан")
+        else:
+            print(f"Бакет {BUCKET_NAME} уже существует")
+    except Exception as e:
+        print(f"Ошибка при создании бакета: {e}")
+
+# Вызываем при инициализации
+ensure_bucket_exists()
+
 minio_client.set_bucket_policy(BUCKET_NAME, policy)
 
 cors_config = """"
@@ -49,7 +62,6 @@ cors_config = """"
     ]
 }
 """
-#minio_client.set_bucket_cors("librarybucket", cors_config)
 
 @file_bp.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
@@ -110,9 +122,9 @@ def list_files():
 def read_book(id):
     try:
         print(id, file=sys.stderr)
-        boo = BookService.find_book_by_id(id)
+        book = BookService.find_book_by_id(id)
 
-        obj_name = boo.minio_key
+        obj_name = book.minio_key
         print(obj_name, file=sys.stderr)
 
         MINIO_DOMAIN = os.getenv("MINIO_DOMAIN")
