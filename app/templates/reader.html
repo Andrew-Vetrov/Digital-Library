@@ -3,153 +3,292 @@
 <head>
   <title>Читалка: {{ filename }}</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
-  <script src="/static/epub.js"></script>
+  <style>
+    .spread-wrapper {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    #viewer {
+      width: 100%;
+      height: 90vh;             /* больше размер книги */
+      border: none;
+      overflow: hidden;
+    }
+
+    .spread-wrapper {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .page {
+      width: 50%;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      overflow: hidden;         /* КЛЮЧ: убрали скролл */
+      background: #fff;
+    }
+    /* На телефонах — одна страница */
+    @media (max-width: 700px) {
+      .page {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 <body>
 
   <select id="toc"></select>
   <a href="{{ url_for('file.list_files') }}">Назад</a>
-  <div id="viewer" class="scrolled"></div>
+
+  <div id="viewer"></div>
+
   <div id="prev" class="arrow">‹</div>
   <div id="next" class="arrow">›</div>
 
-  <div id="area"></div>
-
-  <!-- Вставляем EPUB.js или просто даём ссылку для скачивания -->  
-
   <script>
-    
-    
-    var params = URLSearchParams && new URLSearchParams(document.location.search.substring(1));
-    var url = params && params.get("url") && decodeURIComponent(params.get("url"));
-    var currentSectionIndex = (params && params.get("loc")) ? params.get("loc") : undefined;
-
-    // Load the opf
-    var book = ePub(url || "{{ book_url }}");
-    var rendition = book.renderTo("viewer", {
-      width: "100%",
-      height: 600,
-      spread: "always"
-    });
-
-    rendition.display(currentSectionIndex);
-
-    book.ready.then(() => {
-
-      var next = document.getElementById("next");
-
-      next.addEventListener("click", function(e){
-        book.package.metadata.direction === "rtl" ? rendition.prev() : rendition.next();
-        e.preventDefault();
-      }, false);
-
-      var prev = document.getElementById("prev");
-      prev.addEventListener("click", function(e){
-        book.package.metadata.direction === "rtl" ? rendition.next() : rendition.prev();
-        e.preventDefault();
-      }, false);
-
-      var keyListener = function(e){
-
-        // Left Key
-        if ((e.keyCode || e.which) == 37) {
-          book.package.metadata.direction === "rtl" ? rendition.next() : rendition.prev();
-        }
-
-        // Right Key
-        if ((e.keyCode || e.which) == 39) {
-          book.package.metadata.direction === "rtl" ? rendition.prev() : rendition.next();
-        }
-
-      };
-
-      rendition.on("keyup", keyListener);
-      document.addEventListener("keyup", keyListener, false);
-
-    })
-
-    var title = document.getElementById("title");
-
-    rendition.on("rendered", function(section){
-      var current = book.navigation && book.navigation.get(section.href);
-
-      if (current) {
-        var $select = document.getElementById("toc");
-        var $selected = $select.querySelector("option[selected]");
-        if ($selected) {
-          $selected.removeAttribute("selected");
-        }
-
-        var $options = $select.querySelectorAll("option");
-        for (var i = 0; i < $options.length; ++i) {
-          let selected = $options[i].getAttribute("ref") === current.href;
-          if (selected) {
-            $options[i].setAttribute("selected", "");
-          }
-        }
+ 
+    class SimpleEPUB {
+      constructor(url) {
+        this.url = url;
+        this.zip = null;
+        this.opfPath = null;
+        this.opf = null;
+        this.spine = [];
+        this.manifest = {};
+        this.toc = [];
       }
 
-    });
+      async load() {
+        const buf = await fetch(this.url).then(r => r.arrayBuffer());
+        this.zip = await JSZip.loadAsync(buf);
 
-    rendition.on("relocated", function(location){
-      console.log(location);
-
-      var next = book.package.metadata.direction === "rtl" ?  document.getElementById("prev") : document.getElementById("next");
-      var prev = book.package.metadata.direction === "rtl" ?  document.getElementById("next") : document.getElementById("prev");
-
-      if (location.atEnd) {
-        next.style.visibility = "hidden";
-      } else {
-        next.style.visibility = "visible";
+        await this._readContainer();
+        await this._readOPF();
+        await this._parseTOC();
       }
 
-      if (location.atStart) {
-        prev.style.visibility = "hidden";
-      } else {
-        prev.style.visibility = "visible";
+      async _readContainer() {
+        const xml = await this.zip.file("META-INF/container.xml").async("text");
+        const dom = new DOMParser().parseFromString(xml, "text/xml");
+        this.opfPath = dom.querySelector("rootfile").getAttribute("full-path");
       }
 
-    });
+      async _readOPF() {
+        const xml = await this.zip.file(this.opfPath).async("text");
+        const dom = new DOMParser().parseFromString(xml, "text/xml");
 
-    rendition.on("layout", function(layout) {
-      let viewer = document.getElementById("viewer");
+        // manifest
+        dom.querySelectorAll("manifest item").forEach(item => {
+          this.manifest[item.getAttribute("id")] = {
+            href: item.getAttribute("href"),
+            media: item.getAttribute("media-type")
+          };
+        });
 
-      if (layout.spread) {
-        viewer.classList.remove('single');
-      } else {
-        viewer.classList.add('single');
+        // spine
+        dom.querySelectorAll("spine itemref").forEach(ref => {
+          this.spine.push(ref.getAttribute("idref"));
+        });
+
+        this.opf = dom;
       }
-    });
 
-    window.addEventListener("unload", function () {
-      console.log("unloading");
-      this.book.destroy();
-    });
+      async _parseTOC() {
+        // Ищем навигатор (toc.ncx)
+        let navItem = Object.values(this.manifest)
+          .find(i => i.media === "application/x-dtbncx+xml");
 
-    book.loaded.navigation.then(function(toc){
-			var $select = document.getElementById("toc"),
-					docfrag = document.createDocumentFragment();
+        if (!navItem) return;
 
-			toc.forEach(function(chapter) {
-				var option = document.createElement("option");
-				option.textContent = chapter.label;
-				option.setAttribute("ref", chapter.href);
+        const base = this.opfPath.replace(/[^/]+$/, ""); // путь к opf
+        const xml = await this.zip.file(base + navItem.href).async("text");
+        const dom = new DOMParser().parseFromString(xml, "text/xml");
 
-				docfrag.appendChild(option);
-			});
+        dom.querySelectorAll("navMap > navPoint").forEach(point => {
+          this.toc.push({
+            label: point.querySelector("navLabel text").textContent,
+            href: point.querySelector("content").getAttribute("src")
+          });
+        });
+      }
 
-			$select.appendChild(docfrag);
+      async getChapter(indexOrHref) {
+        const base = this.opfPath.replace(/[^/]+$/, "");
 
-			$select.onchange = function(){
-					var index = $select.selectedIndex,
-							url = $select.options[index].getAttribute("ref");
-					rendition.display(url);
-					return false;
-			};
+        let href = indexOrHref;
 
-		});
+        if (typeof indexOrHref === "number") {
+          const id = this.spine[indexOrHref];
+          href = this.manifest[id].href;
+        }
+
+        const file = this.zip.file(base + href);
+        if (!file) return null;
+
+        return await file.async("text");
+      }
+    }
 
   
+    class SimpleRendition {
+    constructor(book, viewerId) {
+      this.book = book;
+      this.viewer = document.getElementById(viewerId);
+      this.viewer.innerHTML = "";
+
+      this.left = document.createElement("iframe");
+      this.right = document.createElement("iframe");
+
+      this.left.className = "page";
+      this.right.className = "page";
+
+      this.wrapper = document.createElement("div");
+      this.wrapper.className = "spread-wrapper";
+
+      this.wrapper.appendChild(this.left);
+      this.wrapper.appendChild(this.right);
+      this.viewer.appendChild(this.wrapper);
+
+      // для пагинации
+      this.currentChapterIndex = 0;
+      this.pages = [];      // массив страниц (HTML)
+      this.currentPage = 0; // текущая страница в этой главе
+    }
+
+    async display(loc) {
+      if (typeof loc === "string") {
+        const href = loc;
+        const idx = this.book.spine.findIndex(id =>
+          this.book.manifest[id].href === href
+        );
+        if (idx >= 0) this.currentChapterIndex = idx;
+      } else if (typeof loc === "number") {
+        this.currentChapterIndex = loc;
+      }
+
+      await this.loadChapterAndPaginate(this.currentChapterIndex);
+      this.renderSpread();
+    }
+
+    async loadChapterAndPaginate(chapterIndex) {
+      const html = await this.book.getChapter(chapterIndex);
+
+      // создаём скрытый контейнер для вычисления страниц
+      const hidden = document.createElement("div");
+      hidden.style.visibility = "hidden";
+      hidden.style.position = "absolute";
+      hidden.style.top = "-9999px";
+      hidden.style.width = this.viewer.clientWidth/2 + "px";
+      hidden.innerHTML = html;
+      document.body.appendChild(hidden);
+
+      const pageHeight = this.viewer.clientHeight;
+
+      this.pages = [];
+      let currentPageHTML = "";
+      let currentHeight = 0;
+
+      // Бежим по дочерним элементам
+      for (const node of Array.from(hidden.childNodes)) {
+        const temp = document.createElement("div");
+        temp.appendChild(node.cloneNode(true));
+        hidden.appendChild(temp);
+
+        if (hidden.scrollHeight > pageHeight) {
+          // фиксируем страницу
+          this.pages.push(currentPageHTML);
+          currentPageHTML = temp.innerHTML;
+          hidden.innerHTML = "";
+          hidden.appendChild(temp.cloneNode(true));
+        } else {
+          currentPageHTML += temp.innerHTML;
+        }
+      }
+
+      if (currentPageHTML.trim() !== "") {
+        this.pages.push(currentPageHTML);
+      }
+
+      hidden.remove();
+
+      this.currentPage = 0;
+    }
+
+    renderSpread() {
+      const leftPage = this.pages[this.currentPage] || "";
+      const rightPage = this.pages[this.currentPage + 1] || "";
+
+      this.left.srcdoc = `
+        <html><body style="margin:20px; font-size:18px; line-height:1.5;">
+          ${leftPage}
+        </body></html>
+      `;
+      this.right.srcdoc = `
+        <html><body style="margin:20px; font-size:18px; line-height:1.5;">
+          ${rightPage}
+        </body></html>
+      `;
+    }
+
+    next() {
+      if (this.currentPage + 2 < this.pages.length) {
+        this.currentPage += 2;
+        this.renderSpread();
+      } else if (this.currentChapterIndex < this.book.spine.length - 1) {
+        // переходим к следующей главе
+        this.currentChapterIndex++;
+        this.display(this.currentChapterIndex);
+      }
+    }
+
+    prev() {
+      if (this.currentPage >= 2) {
+        this.currentPage -= 2;
+        this.renderSpread();
+      } else if (this.currentChapterIndex > 0) {
+        // переходим к предыдущей главе
+        this.currentChapterIndex--;
+        this.display(this.currentChapterIndex);
+      }
+    }
+  }
+
+
+    (async () => {
+      const params = new URLSearchParams(location.search);
+      const url = params.get("url")
+        ? decodeURIComponent(params.get("url"))
+        : "{{ book_url }}";
+
+      const book = new SimpleEPUB(url);
+      await book.load();
+
+      const rendition = new SimpleRendition(book, "viewer");
+      rendition.display(0);
+
+      // TOC
+      const tocSelect = document.getElementById("toc");
+      book.toc.forEach(item => {
+        const opt = document.createElement("option");
+        opt.textContent = item.label;
+        opt.value = item.href;
+        tocSelect.appendChild(opt);
+      });
+      tocSelect.onchange = () => rendition.display(tocSelect.value);
+
+      // navigation
+      document.getElementById("next").onclick = () => rendition.next();
+      document.getElementById("prev").onclick = () => rendition.prev();
+
+      // keyboard
+      document.addEventListener("keyup", e => {
+        if (e.key === "ArrowRight") rendition.next();
+        if (e.key === "ArrowLeft") rendition.prev();
+      });
+    })();
   </script>
 </body>
 </html>
