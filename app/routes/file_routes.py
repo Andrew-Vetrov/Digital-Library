@@ -1,13 +1,14 @@
-from flask import Blueprint, render_template, request, Response
+from flask import Blueprint, render_template, request, Response, redirect, url_for, session, abort, flash
 import os
 from minio import Minio
-from flask import Blueprint, redirect, url_for, session, abort, flash
 from services.book_service import BookService
 from minio.error import S3Error
 from datetime import timedelta
 from models.models import Book
 from db import get_connection
+from search_index import search_books
 import sys
+
 file_bp = Blueprint("file", __name__)
 
 minio_client = Minio(
@@ -16,7 +17,6 @@ minio_client = Minio(
     secret_key=os.getenv("MINIO_ROOT_PASSWORD"),
     secure=False
 )
-
 
 BUCKET_NAME = os.getenv("BUCKET_NAME", "librarybucket")
 
@@ -45,32 +45,14 @@ def ensure_bucket_exists():
         print(f"Ошибка при создании бакета: {e}")
 
 ensure_bucket_exists()
-
 minio_client.set_bucket_policy(BUCKET_NAME, policy)
-
-cors_config = """"
-{
-    "CORSRules": [
-        {
-            "AllowedHeaders": ["*"],
-            "AllowedMethods": ["GET", "HEAD"],
-            "AllowedOrigins": ["*"],
-            "ExposeHeaders": ["ETag"],
-            "MaxAgeSeconds": 3000
-        }
-    ]
-}
-"""
 
 @file_bp.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
-    print("Просто что-то", flush=True)
     if request.method == "GET":
-        print("Файл прилетел get", flush=True)
         return render_template("upload_file.html")
 
     if request.method == "POST":
-        print("Файл прилетел post", flush=True)
         file = request.files.get("file")
         genre = request.form.get("genre")
 
@@ -83,19 +65,14 @@ def upload_file():
         try:
             title = BookService.upload_book(file, genre)
             return render_template("upload_file.html", message=f"Книга '{title}' успешно загружена!")
-
         except Exception as e:
             return render_template("upload_file.html", message=f"Ошибка при загрузке: {e}")
 
 @file_bp.route("/delete/<int:book_id>", methods=["POST"])
 def delete_book(book_id):
-    user_authorized = session.get("authorized", 0) # это задел на более менее какое-то упраление книгами, 
-                                     # ща кто-угодно может удалять, но это изи фиксится
+    user_authorized = session.get("authorized", 0)
     if not user_authorized:
         abort(403, "Вы не авторизованы")
-
-    if not user_authorized:
-        abort(403, "Доступ запрещён")
 
     BookService.delete_book(book_id)
     flash("Книга успешно удалена!", "success")
@@ -105,7 +82,18 @@ def delete_book(book_id):
 def list_files():
     PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
 
-    # Читаем параметры фильтров
+    query = request.args.get("q")
+    if query and query.strip():
+        es_results = search_books(query.strip())
+
+        book_ids = []
+        for r in es_results:
+            book_ids.append(r["id"])
+
+        books = BookService.find_books(book_ids)
+
+        return render_template("files.html", books=books, genres=[], request=request)
+
     author = request.args.get("author")
     publisher = request.args.get("publisher")
     genre = request.args.get("genre")
@@ -113,7 +101,6 @@ def list_files():
     try:
         books = BookService.find_books()
 
-        # ---- ФИЛЬТРАЦИЯ ----
         if author:
             books = [b for b in books if author.lower() in b.author.lower()]
 
@@ -123,7 +110,6 @@ def list_files():
         if genre:
             books = [b for b in books if b.genre == genre]
 
-        # Подготовка ссылок на обложки
         for book in books:
             if getattr(book, "cover_key", None):
                 book.cover_url = f"{PUBLIC_ENDPOINT}/{BUCKET_NAME}/{book.cover_key}"
@@ -131,19 +117,12 @@ def list_files():
                 book.cover_url = None
 
         all_books = BookService.find_books()
-        
-        print(all_books[0].genre)
         genres = sorted({b.genre for b in all_books if b.genre})
-        print("\n\nGENRES", genres, "\n\n\n")
-        return render_template(
-            "files.html",
-            books=books,
-            genres=genres,
-            request=request
-        )
+
+        return render_template("files.html", books=books, genres=genres, request=request)
 
     except Exception as e:
-        return render_template("upload_file.html", message=f"Ошибка при загрузке списка книг: {e}")
+        return render_template("upload_file.html", message=f"Ошибка: {e}")
 
 @file_bp.route("/reader/<int:id>", methods=["GET"])
 def read_book(id):
@@ -156,12 +135,12 @@ def read_book(id):
 
         MINIO_DOMAIN = os.getenv("MINIO_DOMAIN")
         external_url = f"{MINIO_DOMAIN}/{BUCKET_NAME}/{obj_name}"
-        print("URL = ", external_url, file=sys.stderr)   
+        print("URL = ", external_url, file=sys.stderr)
         return render_template("reader.html", book_url=external_url, id=id)
 
     except S3Error as e:
         return f"Ошибка при открытии книги: {e}"
-    
+
 @file_bp.route("/cover/<int:book_id>")
 def serve_cover(book_id):
     from io import BytesIO

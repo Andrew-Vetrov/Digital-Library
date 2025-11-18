@@ -3,8 +3,11 @@ from minio import Minio
 from utils.epub_parser import EPUBParser
 from models.models import Book
 from db import get_connection
+from search_index import index_book
 
 class BookService:
+    _SENTINEL = object()
+
     @staticmethod
     def upload_book(file_storage, genre=None):
         temp_path = f"/tmp/{file_storage.filename}"
@@ -13,6 +16,7 @@ class BookService:
         parser = EPUBParser(temp_path)
         # тут надо аккуратно глянуть, потому что сейчас у нас весь текст в метадате
         metadata = parser.extract_metadata()
+        book_text = parser._extract_text()
         print("Genre\n",metadata["genre"])
 
 
@@ -47,6 +51,13 @@ class BookService:
             session.add(book)
             session.commit()
             print("Book saved OK\n\n\n")
+
+            index_book(
+                book_id=book.id,
+                title=metadata["title"],
+                author=metadata["author"],
+                content=book_text
+            )
     
             return metadata["title"]
 
@@ -81,9 +92,9 @@ class BookService:
             return True
 
     @staticmethod
-    def find_books():
+    def find_books(*args):
         with get_connection() as session:
-            books = session.query(Book).all()
+            books = session.query(Book).all() if len(args) == 0 else session.query(Book).filter(Book.id.in_(args[0])).all()
 
             bucket = os.getenv("BUCKET_NAME", "books")
             public_url = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
@@ -95,7 +106,6 @@ class BookService:
                     b.cover_url = "https://via.placeholder.com/160x220?text=No+Cover"
 
             return books
-
 
     @staticmethod
     def find_book_by_id(book_id):

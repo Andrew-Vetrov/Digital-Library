@@ -38,29 +38,42 @@
   <h2 class="mb-4 text-center">📚 Моя библиотека</h2>
 
 <div class="container mt-4">
+
+    <form method="GET" action="/files" class="row g-3 p-3 mb-4 border rounded bg-light">
+
+        <div class="col-md-4">
+            <label class="form-label">Поиск по содержимому</label>
+            <input type="text" name="q" class="form-control" placeholder="Введите текст"
+                   value="{{ request.args.get('q', '') }}">
+        </div>
+
+        <div class="col-md-12 mt-2">
+            <button class="btn btn-success">Найти</button>
+            <a href="/files" class="btn btn-secondary">Сбросить</a>
+        </div>
+
+    </form>
+
+
     <form method="GET" action="/files" class="row g-3 p-3 border rounded bg-light">
 
-        <!-- Автор -->
         <div class="col-md-3">
             <label class="form-label">Автор</label>
             <input type="text" name="author" class="form-control" value="{{ request.args.get('author', '') }}">
         </div>
 
-        <!-- Издательство -->
         <div class="col-md-3">
             <label class="form-label">Издательство</label>
             <input type="text" name="publisher" class="form-control" value="{{ request.args.get('publisher', '') }}">
         </div>
 
-        <!-- Жанр -->
         <div class="col-md-3">
             <label class="form-label">Жанр</label>
             <select name="genre" class="form-select">
                 <option value="">— все —</option>
                 {% for g in genres %}
-                <option value="{{ g }}" {% if request.args.get('genre') == g %}selected{% endif %}>
-                    {{ g }}
-                </option>
+                <option value="{{ g }}"> {% if request.args.get('genre') == g %}selected{% endif %}>{{ g }}</option>
+
                 {% endfor %}
             </select>
         </div>
@@ -69,13 +82,12 @@
             <button class="btn btn-primary">Фильтровать</button>
             <a href="/files" class="btn btn-secondary">Сбросить</a>
         </div>
-
     </form>
+
 </div>
 
-
   {% if books %}
-  <div class="row">
+  <div class="row mt-4">
     {% for book in books %}
       <div class="col-md-4 mb-4">
         <div class="card book-card p-2 text-center">
@@ -105,7 +117,7 @@
     {% endfor %}
   </div>
   {% else %}
-    <p class="text-center text-muted">Пока нет загруженных книг.</p>
+    <p class="text-center text-muted mt-4">Книги не найдены.</p>
   {% endif %}
 </div>
 
