@@ -5,7 +5,7 @@ from routes.favourite_routes import favourite_bp
 from services.favourites_service import FavoriteService
 from db import init_db
 from config import Config
-from search_index import create_index
+from services.elasticsearch_service import create_index
 
 app = Flask(__name__)
 app.secret_key = Config().SECRET_KEY

@@ -3,7 +3,7 @@ from minio import Minio
 from utils.epub_parser import EPUBParser
 from models.models import Book
 from db import get_connection
-from search_index import index_book
+from services.elasticsearch_service import index_book
 
 class BookService:
     _SENTINEL = object()

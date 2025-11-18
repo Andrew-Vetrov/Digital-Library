@@ -6,7 +6,7 @@ from minio.error import S3Error
 from datetime import timedelta
 from models.models import Book
 from db import get_connection
-from search_index import search_books
+from services.elasticsearch_service import search_books
 import sys
 
 file_bp = Blueprint("file", __name__)
