@@ -1,294 +1,291 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <title>Читалка: {{ filename }}</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
-  <style>
-    .spread-wrapper {
-      display: flex;
-      width: 100%;
-      height: 100%;
-    }
-
-    #viewer {
-      width: 100%;
-      height: 90vh;             /* больше размер книги */
-      border: none;
-      overflow: hidden;
-    }
-
-    .spread-wrapper {
-      display: flex;
-      width: 100%;
-      height: 100%;
-    }
-
-    .page {
-      width: 50%;
-      border: 1px solid #ccc;
-      box-sizing: border-box;
-      overflow: hidden;         /* КЛЮЧ: убрали скролл */
-      background: #fff;
-    }
-    /* На телефонах — одна страница */
-    @media (max-width: 700px) {
-      .page {
-        width: 100%;
-      }
-    }
-  </style>
-</head>
-<body>
-
-  <select id="toc"></select>
-  <a href="{{ url_for('file.list_files') }}">Назад</a>
-
-  <div id="viewer"></div>
-
-  <div id="prev" class="arrow">‹</div>
-  <div id="next" class="arrow">›</div>
-
-  <script>
- 
-    class SimpleEPUB {
-      constructor(url) {
-        this.url = url;
-        this.zip = null;
-        this.opfPath = null;
-        this.opf = null;
-        this.spine = [];
-        this.manifest = {};
-        this.toc = [];
-      }
-
-      async load() {
-        const buf = await fetch(this.url).then(r => r.arrayBuffer());
-        this.zip = await JSZip.loadAsync(buf);
-
-        await this._readContainer();
-        await this._readOPF();
-        await this._parseTOC();
-      }
-
-      async _readContainer() {
-        const xml = await this.zip.file("META-INF/container.xml").async("text");
-        const dom = new DOMParser().parseFromString(xml, "text/xml");
-        this.opfPath = dom.querySelector("rootfile").getAttribute("full-path");
-      }
-
-      async _readOPF() {
-        const xml = await this.zip.file(this.opfPath).async("text");
-        const dom = new DOMParser().parseFromString(xml, "text/xml");
-
-        // manifest
-        dom.querySelectorAll("manifest item").forEach(item => {
-          this.manifest[item.getAttribute("id")] = {
-            href: item.getAttribute("href"),
-            media: item.getAttribute("media-type")
-          };
-        });
-
-        // spine
-        dom.querySelectorAll("spine itemref").forEach(ref => {
-          this.spine.push(ref.getAttribute("idref"));
-        });
-
-        this.opf = dom;
-      }
-
-      async _parseTOC() {
-        // Ищем навигатор (toc.ncx)
-        let navItem = Object.values(this.manifest)
-          .find(i => i.media === "application/x-dtbncx+xml");
-
-        if (!navItem) return;
-
-        const base = this.opfPath.replace(/[^/]+$/, ""); // путь к opf
-        const xml = await this.zip.file(base + navItem.href).async("text");
-        const dom = new DOMParser().parseFromString(xml, "text/xml");
-
-        dom.querySelectorAll("navMap > navPoint").forEach(point => {
-          this.toc.push({
-            label: point.querySelector("navLabel text").textContent,
-            href: point.querySelector("content").getAttribute("src")
-          });
-        });
-      }
-
-      async getChapter(indexOrHref) {
-        const base = this.opfPath.replace(/[^/]+$/, "");
-
-        let href = indexOrHref;
-
-        if (typeof indexOrHref === "number") {
-          const id = this.spine[indexOrHref];
-          href = this.manifest[id].href;
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data: *; frame-src blob: data:; object-src blob: data:; form-action 'none';">
+<title>E-Book Reader</title>
+<style>
+:root {
+    --active-bg: rgba(0, 0, 0, .05);
+}
+@supports (color-scheme: light dark) {
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --active-bg: rgba(255, 255, 255, .1);
         }
-
-        const file = this.zip.file(base + href);
-        if (!file) return null;
-
-        return await file.async("text");
-      }
     }
+}
+html {
+    height: 100%;
+}
+body {
+    margin: 0 auto;
+    height: 100%;
+    font: menu;
+    font-family: system-ui, sans-serif;
+}
+#drop-target {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    visibility: hidden;
+}
+#drop-target h1 {
+    font-weight: 900;
+}
+#file-button {
+    font: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.icon {
+    display: block;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 2px;
+}
+.empty-state-icon {
+    margin: auto;
+}
+.toolbar {
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 48px;
+    padding: 6px;
+    transition: opacity 250ms ease;
+    visibility: hidden;
+}
+.toolbar button {
+    padding: 3px;
+    border-radius: 6px;
+    background: none;
+    border: 0;
+    color: GrayText;
+}
+.toolbar button:hover {
+    background: rgba(0, 0, 0, .1);
+    color: currentcolor;
+}
+#header-bar {
+    top: 0;
+}
+#nav-bar {
+    bottom: 0;
+}
+#progress-slider {
+    flex-grow: 1;
+    margin: 0 12px;
+    visibility: hidden;
+}
+#side-bar {
+    visibility: hidden;
+    box-sizing: border-box;
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 320px;
+    transform: translateX(-320px);
+    display: flex;
+    flex-direction: column;
+    background: Canvas;
+    color: CanvasText;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 40px rgba(0, 0, 0, .2);
+    transition: visibility 0s linear 300ms, transform 300ms ease;
+}
+#side-bar.show {
+    visibility: visible;
+    transform: translateX(0);
+    transition-delay: 0s;
+}
+#dimming-overlay {
+    visibility: hidden;
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, .2);
+    opacity: 0;
+    transition: visibility 0s linear 300ms, opacity 300ms ease;
+}
+#dimming-overlay.show {
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0s;
+}
+#side-bar-header {
+    padding: 1rem;
+    display: flex;
+    border-bottom: 1px solid rgba(0, 0, 0, .1);
+    align-items: center;
+}
+#side-bar-cover {
+    height: 10vh;
+    min-height: 60px;
+    max-height: 180px;
+    border-radius: 3px;
+    border: 0;
+    background: lightgray;
+    box-shadow: 0 0 1px rgba(0, 0, 0, .1), 0 0 16px rgba(0, 0, 0, .1);
+    margin-inline-end: 1rem;
+}
+#side-bar-cover:not([src]) {
+    display: none;
+}
+#side-bar-title {
+    margin: .5rem 0;
+    font-size: inherit;
+}
+#side-bar-author {
+    margin: .5rem 0;
+    font-size: small;
+    color: GreyText;
+}
+#toc-view {
+    padding: .5rem;
+    overflow-y: scroll;
+}
+#toc-view li, #toc-view ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+#toc-view a, #toc-view span {
+    display: block;
+    border-radius: 6px;
+    padding: 8px;
+    margin: 2px 0;
+}
+#toc-view a {
+    color: CanvasText;
+    text-decoration: none;
+}
+#toc-view a:hover {
+    background: var(--active-bg);
+}
+#toc-view span {
+    color: GreyText;
+}
+#toc-view svg {
+    margin-inline-start: -24px;
+    padding-inline-start: 5px;
+    padding-inline-end: 6px;
+    fill: CanvasText;
+    cursor: default;
+    transition: transform .2s ease;
+    opacity: .5;
+}
+#toc-view svg:hover {
+    opacity: 1;
+}
+#toc-view [aria-current] {
+    font-weight: bold;
+    background: var(--active-bg);
+}
+#toc-view [aria-expanded="false"] svg {
+    transform: rotate(-90deg);
+}
+#toc-view [aria-expanded="false"] + [role="group"] {
+    display: none;
+}
+.menu-container {
+    position: relative;
+}
+.menu, .menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.menu {
+    visibility: hidden;
+    position: absolute;
+    right: 0;
+    background: Canvas;
+    color: CanvasText;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1);
+    padding: 6px;
+    cursor: default;
+}
+.menu.show {
+    visibility: visible;
+}
+.menu li {
+    padding: 6px 12px;
+    padding-left: 24px;
+    border-radius: 6px;
+}
+.menu li:hover {
+    background: var(--active-bg);
+}
+.menu li[aria-checked="true"] {
+    background-position: center left;
+    background-repeat: no-repeat;
+    background-image: url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%2F%3E%3C%2Fsvg%3E');
+}
+.popover {
+    background: Canvas;
+    color: CanvasText;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1), 0 0 32px rgba(0, 0, 0, .1);
+}
+.popover-arrow-down {
+    fill: Canvas;
+    filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .2));
+}
+.popover-arrow-up {
+    fill: Canvas;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .2));
+}
+</style>
 
-  
-    class SimpleRendition {
-    constructor(book, viewerId) {
-      this.book = book;
-      this.viewer = document.getElementById(viewerId);
-      this.viewer.innerHTML = "";
-
-      this.left = document.createElement("iframe");
-      this.right = document.createElement("iframe");
-
-      this.left.className = "page";
-      this.right.className = "page";
-
-      this.wrapper = document.createElement("div");
-      this.wrapper.className = "spread-wrapper";
-
-      this.wrapper.appendChild(this.left);
-      this.wrapper.appendChild(this.right);
-      this.viewer.appendChild(this.wrapper);
-
-      // для пагинации
-      this.currentChapterIndex = 0;
-      this.pages = [];      // массив страниц (HTML)
-      this.currentPage = 0; // текущая страница в этой главе
-    }
-
-    async display(loc) {
-      if (typeof loc === "string") {
-        const href = loc;
-        const idx = this.book.spine.findIndex(id =>
-          this.book.manifest[id].href === href
-        );
-        if (idx >= 0) this.currentChapterIndex = idx;
-      } else if (typeof loc === "number") {
-        this.currentChapterIndex = loc;
-      }
-
-      await this.loadChapterAndPaginate(this.currentChapterIndex);
-      this.renderSpread();
-    }
-
-    async loadChapterAndPaginate(chapterIndex) {
-      const html = await this.book.getChapter(chapterIndex);
-
-      // создаём скрытый контейнер для вычисления страниц
-      const hidden = document.createElement("div");
-      hidden.style.visibility = "hidden";
-      hidden.style.position = "absolute";
-      hidden.style.top = "-9999px";
-      hidden.style.width = this.viewer.clientWidth/2 + "px";
-      hidden.innerHTML = html;
-      document.body.appendChild(hidden);
-
-      const pageHeight = this.viewer.clientHeight;
-
-      this.pages = [];
-      let currentPageHTML = "";
-      let currentHeight = 0;
-
-      // Бежим по дочерним элементам
-      for (const node of Array.from(hidden.childNodes)) {
-        const temp = document.createElement("div");
-        temp.appendChild(node.cloneNode(true));
-        hidden.appendChild(temp);
-
-        if (hidden.scrollHeight > pageHeight) {
-          // фиксируем страницу
-          this.pages.push(currentPageHTML);
-          currentPageHTML = temp.innerHTML;
-          hidden.innerHTML = "";
-          hidden.appendChild(temp.cloneNode(true));
-        } else {
-          currentPageHTML += temp.innerHTML;
-        }
-      }
-
-      if (currentPageHTML.trim() !== "") {
-        this.pages.push(currentPageHTML);
-      }
-
-      hidden.remove();
-
-      this.currentPage = 0;
-    }
-
-    renderSpread() {
-      const leftPage = this.pages[this.currentPage] || "";
-      const rightPage = this.pages[this.currentPage + 1] || "";
-
-      this.left.srcdoc = `
-        <html><body style="margin:20px; font-size:18px; line-height:1.5;">
-          ${leftPage}
-        </body></html>
-      `;
-      this.right.srcdoc = `
-        <html><body style="margin:20px; font-size:18px; line-height:1.5;">
-          ${rightPage}
-        </body></html>
-      `;
-    }
-
-    next() {
-      if (this.currentPage + 2 < this.pages.length) {
-        this.currentPage += 2;
-        this.renderSpread();
-      } else if (this.currentChapterIndex < this.book.spine.length - 1) {
-        // переходим к следующей главе
-        this.currentChapterIndex++;
-        this.display(this.currentChapterIndex);
-      }
-    }
-
-    prev() {
-      if (this.currentPage >= 2) {
-        this.currentPage -= 2;
-        this.renderSpread();
-      } else if (this.currentChapterIndex > 0) {
-        // переходим к предыдущей главе
-        this.currentChapterIndex--;
-        this.display(this.currentChapterIndex);
-      }
-    }
-  }
-
-
-    (async () => {
-      const params = new URLSearchParams(location.search);
-      const url = params.get("url")
-        ? decodeURIComponent(params.get("url"))
-        : "{{ book_url }}";
-
-      const book = new SimpleEPUB(url);
-      await book.load();
-
-      const rendition = new SimpleRendition(book, "viewer");
-      rendition.display(0);
-
-      // TOC
-      const tocSelect = document.getElementById("toc");
-      book.toc.forEach(item => {
-        const opt = document.createElement("option");
-        opt.textContent = item.label;
-        opt.value = item.href;
-        tocSelect.appendChild(opt);
-      });
-      tocSelect.onchange = () => rendition.display(tocSelect.value);
-
-      // navigation
-      document.getElementById("next").onclick = () => rendition.next();
-      document.getElementById("prev").onclick = () => rendition.prev();
-
-      // keyboard
-      document.addEventListener("keyup", e => {
-        if (e.key === "ArrowRight") rendition.next();
-        if (e.key === "ArrowLeft") rendition.prev();
-      });
-    })();
-  </script>
-</body>
-</html>
+<div id="dimming-overlay" aria-hidden="true"></div>
+<div id="side-bar">
+    <div id="side-bar-header">
+        <img id="side-bar-cover">
+        <div>
+            <h1 id="side-bar-title"></h1>
+            <p id="side-bar-author"></p>
+        </div>
+    </div>
+    <div id="toc-view"></div>
+</div>
+<div id="header-bar" class="toolbar">
+    <button id="side-bar-button" aria-label="Show sidebar">
+        <svg class="icon" width="24" height="24" aria-hidden="true">
+            <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
+        </svg>
+    </button>
+    <div id="menu-button" class="menu-container">
+        
+    </div>
+</div>
+<div id="nav-bar" class="toolbar">
+    <button id="left-button" aria-label="Go left">
+        <svg class="icon" width="24" height="24" aria-hidden="true">
+            <path d="M 15 6 L 9 12 L 15 18"/>
+        </svg>
+    </button>
+    <input id="progress-slider" type="range" min="0" max="1" step="any" list="tick-marks">
+    <datalist id="tick-marks"></datalist>
+    <button id="right-button" aria-label="Go right">
+        <svg class="icon" width="24" height="24" aria-hidden="true">
+            <path d="M 9 6 L 15 12 L 9 18"/>
+        </svg>
+    </button>
+</div>
+<div id="app" data-book-url="{{ book_url }}"></div>
+<script src="/static/reader.js" type="module"></script>
