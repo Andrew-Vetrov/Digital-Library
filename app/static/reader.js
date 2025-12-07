@@ -63,6 +63,11 @@ const formatContributor = contributor => Array.isArray(contributor)
     : formatOneContributor(contributor)
 
 class Reader {
+    #bookId = null
+    #lastSaveTime = 0
+    #saveTimeout = null
+    #isSaving = false
+    #minSaveInterval = 2000
     #tocView
     style = {
         spacing: 1.4,
@@ -81,10 +86,197 @@ class Reader {
             $('#side-bar').classList.add('show')
         })
         $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
+        this.#bookId = this.#extractBookId()
 
-
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.saveCurrentPosition()
+            }
+        })
+        
     }
+
+    #extractBookId() {
+        // Вариант 1: Из data-атрибута
+        const appElement = document.getElementById('app')
+        if (appElement?.dataset.bookId) {
+            return parseInt(appElement.dataset.bookId)
+        }
+        
+        
+        console.error("ERROR PARSING BOOKID")
+        return null // Для локальных файлов без book_id
+    }
+
+    async #restoreFromSavedPosition(savedData) {
+    if (!savedData?.loc) return
+    
+    try {
+        if (this.view.convertLocToPosition) {
+            const position = this.view.convertLocToPosition(
+                savedData.loc,
+                savedData.location_total
+            )
+            
+            if (position.index !== undefined) {
+                await this.view.goTo(position)
+                console.log(`Restored to Loc ${savedData.loc}, section ${position.index}`)
+                return
+            }
+        }
+        
+        // Fallback: используем fraction если есть
+        if (savedData.fraction !== undefined) {
+            await this.view.goToFraction(savedData.fraction)
+            console.log(`Restored to fraction ${savedData.fraction} (Loc ${savedData.loc})`)
+        }
+        
+    } catch (e) {
+        console.error('Failed to restore:', e)
+    }
+}
+    
+    
+    
+    #onRelocate({ detail }) {
+        const { fraction, location, tocItem, pageItem } = detail
+        if (location?.current !== undefined && this.#bookId) {
+            // Отменяем предыдущий таймер
+            if (this.#saveTimeout) {
+                clearTimeout(this.#saveTimeout)
+            }
+            
+            // Сохраняем через 1 секунду после последнего изменения
+            this.#saveTimeout = setTimeout(() => {
+                this.#saveLoc(location.current)
+            }, 1000)
+        }
+
+        const percent = percentFormat.format(fraction)
+        const loc = pageItem
+            ? `Page ${pageItem.label}`
+            : `Loc ${location.current}`
+        const slider = $('#progress-slider')
+        slider.style.visibility = 'visible'
+        slider.value = fraction
+        slider.title = `${percent} · ${loc}`
+        if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
+    }
+    
+    #schedulePositionSave(positionData) {
+        // Отменяем предыдущий таймер
+        if (this.#saveTimeout) {
+            clearTimeout(this.#saveTimeout)
+        }
+        
+        // Дебаунс: сохраняем через 1 секунду после последнего изменения
+        this.#saveTimeout = setTimeout(() => {
+            this.#savePositionToServer(positionData)
+        }, 1000)
+    }
+    
+    async #savePositionToServer(positionData) {
+        if (!this.#bookId || this.#isSaving) return
+        
+        // Проверяем частоту сохранений
+        const now = Date.now()
+        if (now - this.#lastSaveTime < this.#minSaveInterval) {
+            return // Слишком часто
+        }
+        
+        this.#isSaving = true
+        
+        try {
+            const data = {
+                loc: positionData.loc,
+                location_current: positionData.loc,
+                location_total: positionData.location_total,
+                fraction: positionData.fraction,
+                cfi: positionData.cfi,
+                section_index: positionData.section_index,
+                saved_at: new Date().toISOString(),
+                reason: positionData.reason || 'auto_save'
+            }
+            
+            // Удаляем пустые поля
+            Object.keys(data).forEach(key => {
+                if (data[key] === undefined || data[key] === null) {
+                    delete data[key]
+                }
+            })
+            
+            // Используем sendBeacon для надежного сохранения
+            const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+            const success = navigator.sendBeacon?.(
+                `http://localhost:3000/reading_progress/${this.#bookId}`,
+                blob
+            )
+            
+            if (!success) {
+                // Fallback на обычный fetch
+                await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                    keepalive: true
+                })
+            }
+            
+            this.#lastSaveTime = Date.now()
+            console.log(`Position saved: Loc ${data.loc}`)
+            
+        } catch (e) {
+            console.error('Failed to save position:', e)
+        
+        } finally {
+            this.#isSaving = false
+        }
+    }
+    
+    #saveToLocalStorage(positionData) {
+        try {
+            const key = `book_position_${this.#bookId}`
+            localStorage.setItem(key, JSON.stringify({
+                ...positionData,
+                saved_at: new Date().toISOString(),
+                is_backup: true
+            }))
+        } catch (e) {
+            console.error('Failed to save to localStorage:', e)
+        }
+    }
+    
+    #savePosition(reason) {
+        if (!this.view?.lastLocation || !this.#bookId) return
+        
+        const position = this.view.lastLocation
+        
+        this.#savePositionToServer({
+            loc: position.location?.current,
+            location_total: position.location?.total,
+            fraction: position.fraction,
+            cfi: position.cfi,
+            section_index: position.section?.current,
+            reason: reason
+        })
+    }
+
     async open(file) {
+        let savedLoc = null
+        if (this.#bookId) {
+            try {
+                const response = await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    if (data.loc !== null && data.loc !== undefined) {
+                        savedLoc = data.loc
+                        console.log(`Loaded saved Loc: ${savedLoc}`)
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load saved position:', e)
+            }
+        }
         this.view = document.createElement('diglib-view')
         document.body.append(this.view)
         await this.view.open(file)
@@ -166,7 +358,37 @@ class Reader {
                 if (annotation.note) alert(annotation.note)
             })
         }
+
+         if (savedLoc !== null) {
+            // Ждем немного пока книга загрузится
+            setTimeout(() => {
+                this.#restorePosition(savedLoc)
+            }, 500)
+        } else {
+            this.view.renderer.next()
+        }
     }
+
+    async #restorePosition(locNumber) {
+        try {
+            // Преобразуем Loc во fraction для навигации
+            const totalLocs = this.view.lastLocation?.location?.total
+            
+            if (totalLocs && locNumber < totalLocs) {
+                const fraction = locNumber / totalLocs
+                await this.view.goToFraction(fraction)
+                console.log(`Restored to Loc ${locNumber}`)
+                
+                // Можно показать уведомление
+            } else {
+                // Если не можем вычислить, начинаем с начала
+                await this.view.goToTextStart()
+            }
+        } catch (e) {
+            console.error('Failed to restore position:', e)
+        }
+    }
+
     #handleKeydown(event) {
         const k = event.key
         if (k === 'ArrowLeft' || k === 'h') this.view.goLeft()
@@ -175,17 +397,31 @@ class Reader {
     #onLoad({ detail: { doc } }) {
         doc.addEventListener('keydown', this.#handleKeydown.bind(this))
     }
-    #onRelocate({ detail }) {
-        const { fraction, location, tocItem, pageItem } = detail
-        const percent = percentFormat.format(fraction)
-        const loc = pageItem
-            ? `Page ${pageItem.label}`
-            : `Loc ${location.current}`
-        const slider = $('#progress-slider')
-        slider.style.visibility = 'visible'
-        slider.value = fraction
-        slider.title = `${percent} · ${loc}`
-        if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
+    
+
+     async #saveLoc(locNumber) {
+        if (!this.#bookId) return
+        
+        try {
+            const response = await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ loc: locNumber })
+            })
+            
+            if (response.ok) {
+                console.log(`Loc ${locNumber} saved successfully`)
+            } else {
+                console.error(`Failed to save Loc ${locNumber}: ${response.status}`)
+            }
+        } catch (e) {
+            console.error('Error saving Loc:', e)
+        }
+    }
+
+    saveCurrentPosition() {
+        if (!this.view?.lastLocation?.location?.current || !this.#bookId) return
+        this.#saveLoc(this.view.lastLocation.location.current)
     }
 }
 

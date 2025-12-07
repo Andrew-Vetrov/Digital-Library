@@ -45,7 +45,7 @@ class Book(Base):
     genre = Column(String(100))
     minio_key = Column(String(255), nullable=False)
     cover_key = Column(String(255))
-
+    last_position = Column(Integer)
     # список Favourite объектов
     favorited_by = relationship(
         "Favourite",
@@ -60,3 +60,4 @@ class Book(Base):
         self.genre = genre
         self.minio_key = minio_key
         self.cover_key = cover_key
+        self.last_position = 0

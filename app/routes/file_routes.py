@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, Response, redirect, url_for, session, abort, flash
+from flask import Blueprint, render_template, request, Response, redirect, url_for, session, abort, flash, jsonify
 import os
 from minio import Minio
 from services.book_service import BookService
@@ -8,6 +8,7 @@ from models.models import Book
 from db import get_connection
 from services.elasticsearch_service import search_books
 import sys
+import json
 
 file_bp = Blueprint("file", __name__)
 
@@ -136,10 +137,52 @@ def read_book(id):
         MINIO_DOMAIN = os.getenv("MINIO_DOMAIN")
         external_url = f"{MINIO_DOMAIN}/{BUCKET_NAME}/{obj_name}"
         print("URL = ", external_url, file=sys.stderr)
-        return render_template("reader.html", book_url=external_url, id=id)
+        return render_template("reader.html", book_url=external_url, book_id=id)
 
     except S3Error as e:
         return f"Ошибка при открытии книги: {e}"
+    
+@file_bp.route("/reading_progress/<int:book_id>", methods=["GET", "POST"])
+def reading_position(book_id):
+    if request.method == 'GET':
+        """Получить сохраненную позицию (Loc)"""
+        try:
+            book = BookService.find_book_by_id(book_id)
+            loc = book.last_position
+            return jsonify({
+                'loc': loc
+            })
+        except Exception as e:
+            print(e)
+            return jsonify({
+                'error': str(e),
+                'loc': None
+            }), 500
+    
+    elif request.method == 'POST':
+        """Сохранить позицию (Loc)"""
+        data = request.get_json()
+        
+        if not data or 'loc' not in data:
+            return jsonify({'error': 'Missing loc'}), 400
+        
+        try:
+            loc = int(data['loc'])  # Преобразуем в int
+            
+            # Сохраняем через BookService
+            BookService.set_reading_position(book_id, loc)
+            
+            return jsonify({
+                'success': True,
+                'loc': loc,
+                'book_id': book_id
+            })
+            
+        except ValueError:
+            return jsonify({'error': 'loc must be a number'}), 400
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+
 
 @file_bp.route("/cover/<int:book_id>")
 def serve_cover(book_id):

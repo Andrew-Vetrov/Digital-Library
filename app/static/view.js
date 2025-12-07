@@ -203,6 +203,29 @@ export class View extends HTMLElement {
             this.renderer.goTo(resolved)
         })
     }
+
+    convertLocToPosition(locNumber, totalLocs = null) {
+        if (!this.#sectionProgress) {
+            return { index: 0, anchor: 0 }
+        }
+        
+        // Если не передали totalLocs, берем из последней позиции
+        const total = totalLocs || this.lastLocation?.location?.total
+        if (!total) {
+            return { index: 0, anchor: 0 }
+        }
+        
+        const fraction = locNumber / total
+        const [index, anchorValue] = this.#sectionProgress.getSection(fraction)
+        
+        return {
+            index,
+            anchor: () => anchorValue,
+            loc: locNumber,
+            fraction: fraction
+        }
+    }
+
     async open(book) {
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
@@ -419,12 +442,38 @@ export class View extends HTMLElement {
     resolveNavigation(target) {
         try {
             if (typeof target === 'number') return { index: target }
+            
+            // ПОДДЕРЖКА СОХРАНЕННОЙ ПОЗИЦИИ ПО LOC:
+            if (target?.loc !== undefined) {
+                // Используем SectionProgress для преобразования loc в позицию
+                if (this.#sectionProgress) {
+                    const totalLocs = target.location_total || 
+                                     this.lastLocation?.location?.total
+                    
+                    if (totalLocs) {
+                        const fraction = target.loc / totalLocs
+                        const [index, anchorValue] = this.#sectionProgress.getSection(fraction)
+                        return { 
+                            index, 
+                            anchor: () => anchorValue,
+                            // Сохраняем loc для информации
+                            loc: target.loc 
+                        }
+                    }
+                }
+                
+                // Fallback: начало книги
+                return { index: 0, anchor: 0 }
+            }
+            
             if (typeof target.fraction === 'number') {
                 const [index, anchor] = this.#sectionProgress.getSection(target.fraction)
                 return { index, anchor }
             }
+            
             if (CFI.isCFI.test(target)) return this.resolveCFI(target)
             return this.book.resolveHref(target)
+            
         } catch (e) {
             console.error(e)
             console.error(`Could not resolve target ${target}`)
