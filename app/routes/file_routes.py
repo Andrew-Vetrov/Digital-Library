@@ -9,6 +9,7 @@ from db import get_connection
 from services.elasticsearch_service import search_books
 import sys
 import json
+from flask import after_this_request
 
 file_bp = Blueprint("file", __name__)
 
@@ -68,6 +69,15 @@ def upload_file():
             return render_template("upload_file.html", message=f"Книга '{title}' успешно загружена!")
         except Exception as e:
             return render_template("upload_file.html", message=f"Ошибка при загрузке: {e}")
+
+
+@file_bp.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = 'http://127.0.0.1:3000'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    return response
 
 @file_bp.route("/delete/<int:book_id>", methods=["POST"])
 def delete_book(book_id):
@@ -167,7 +177,7 @@ def reading_position(book_id):
             return jsonify({'error': 'Missing loc'}), 400
         
         try:
-            loc = int(data['loc'])  # Преобразуем в int
+            loc = data['loc']  # Преобразуем в int
             
             # Сохраняем через BookService
             BookService.set_reading_position(book_id, loc)

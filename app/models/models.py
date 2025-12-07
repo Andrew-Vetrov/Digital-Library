@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey
+from sqlalchemy import Column, String, Integer, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from db import Base
 
@@ -45,7 +45,7 @@ class Book(Base):
     genre = Column(String(100))
     minio_key = Column(String(255), nullable=False)
     cover_key = Column(String(255))
-    last_position = Column(Integer)
+    last_position = Column(Float)
     # список Favourite объектов
     favorited_by = relationship(
         "Favourite",

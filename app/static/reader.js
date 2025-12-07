@@ -139,29 +139,40 @@ class Reader {
     
     
     #onRelocate({ detail }) {
-        const { fraction, location, tocItem, pageItem } = detail
-        if (location?.current !== undefined && this.#bookId) {
-            // Отменяем предыдущий таймер
-            if (this.#saveTimeout) {
-                clearTimeout(this.#saveTimeout)
-            }
-            
-            // Сохраняем через 1 секунду после последнего изменения
-            this.#saveTimeout = setTimeout(() => {
-                this.#saveLoc(location.current)
-            }, 1000)
-        }
-
-        const percent = percentFormat.format(fraction)
-        const loc = pageItem
-            ? `Page ${pageItem.label}`
-            : `Loc ${location.current}`
-        const slider = $('#progress-slider')
-        slider.style.visibility = 'visible'
-        slider.value = fraction
-        slider.title = `${percent} · ${loc}`
-        if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
+    const { fraction } = detail  // ← ТОЛЬКО ЭТО берем!
+    
+    // Сохраняем ТОЛЬКО fraction
+    if (this.#bookId) {
+        if (this.#saveTimeout) clearTimeout(this.#saveTimeout)
+        
+        this.#saveTimeout = setTimeout(() => {
+            this.#saveFraction(fraction)  // ← вызываем с fraction
+        }, 1000)
     }
+
+    // UI обновляем тоже fraction
+    const percent = percentFormat.format(fraction)
+    const slider = $('#progress-slider')
+    slider.style.visibility = 'visible'
+    slider.value = fraction
+    slider.title = `${percent}`
+}
+async #saveFraction(fraction) {
+    const data = {
+        loc: fraction,  // ← ТОЛЬКО ЭТО отправляем!
+        //saved_at: new Date().toISOString()
+    }
+    if (fraction == 1.0) {
+        alert("Данил Ромашка вами доволен")
+    }
+    await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)  // ← {fraction: 0.5432}
+    })
+    
+    console.log(`Fraction saved: ${fraction}`)
+}
     
     #schedulePositionSave(positionData) {
         // Отменяем предыдущий таймер
@@ -369,24 +380,32 @@ class Reader {
         }
     }
 
-    async #restorePosition(locNumber) {
-        try {
-            // Преобразуем Loc во fraction для навигации
-            const totalLocs = this.view.lastLocation?.location?.total
-            
-            if (totalLocs && locNumber < totalLocs) {
-                const fraction = locNumber / totalLocs
-                await this.view.goToFraction(fraction)
-                console.log(`Restored to Loc ${locNumber}`)
-                
-                // Можно показать уведомление
-            } else {
-                // Если не можем вычислить, начинаем с начала
-                await this.view.goToTextStart()
-            }
-        } catch (e) {
-            console.error('Failed to restore position:', e)
-        }
+    async #restorePosition(fraction) {
+        // 1. Скрываем
+    this.view.style.opacity = '0'
+    
+    // 2. Ждем загрузки
+    await new Promise(r => setTimeout(r, 500))
+    
+    // 3. Переходим
+    await this.view.goToFraction(fraction)
+    
+    // 4. Форсируем рендер
+    //this.view.renderer?.previous?.() // туда-сюда
+
+    // 5. Ждем
+    await new Promise(r => setTimeout(r, 300))
+    
+    // 6. Показываем
+    this.view.style.opacity = '1'
+    if (fraction != 1.0){this.view.goLeft()}
+    
+    // 7. Еще раз уточняем (иногда помогает)
+    setTimeout(() => {
+        this.view.goToFraction(fraction + 0.001).then(() => {
+            this.view.goToFraction(fraction - 0.001)
+        })
+    }, 100)
     }
 
     #handleKeydown(event) {
@@ -400,6 +419,7 @@ class Reader {
     
 
      async #saveLoc(locNumber) {
+        return
         if (!this.#bookId) return
         
         try {
