@@ -53,6 +53,11 @@ class Book(Base):
         cascade="all, delete-orphan"
     )
 
+    bookmarked_by = relationship(
+        "Bookmark",
+        back_populates = "book",
+        cascade="all, delete-orphan"
+    )
     def __init__(self, title, author, language, genre, minio_key, cover_key=None):
         self.title = title
         self.author = author
@@ -61,3 +66,17 @@ class Book(Base):
         self.minio_key = minio_key
         self.cover_key = cover_key
         self.last_position = 0
+
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255), nullable=False)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False)
+    position = Column(Float)
+    book = relationship(
+        "Book",
+        back_populates = "bookmarked_by"
+    )
+    def __init__(self, title, position):
+        self.title = title
+        self.poistion = position
