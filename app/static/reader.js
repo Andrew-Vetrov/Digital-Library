@@ -180,17 +180,32 @@ async #saveFraction(fraction) {
 
 async addBookmark() {
     if (!this.view?.lastLocation || !this.#bookId) return
+    
+    this.view.goLeft()
+    this.view.style.opacity = '0'
+    this.view.style.pointerEvents = 'none'
 
+    this.view.goLeft()
+    await new Promise(r => setTimeout(r, 1000))
     const pos = this.view.lastLocation.fraction
-    const title = prompt("Название закладки:", "Моя закладка")
+    await new Promise(r => setTimeout(r, 30))
+    this.view.goRight()
+    await new Promise(r => setTimeout(r, 30))
+    const danil=this.view.lastLocation.fraction
+        //const pos = this.view.lastLocation.fraction
+        console.log("pos = "+pos)
+    this.view.style.opacity = '1'
+    this.view.style.pointerEvents = 'auto'
 
+
+    const title = prompt("Название закладки:", "Моя закладка")
     if (!title) return
     await fetch(`http://127.0.0.1:3000/bookmarks/${this.#bookId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, position: pos })
     })
-
+    
     alert("Закладка сохранена!")
     this.loadBookmarks()
 }

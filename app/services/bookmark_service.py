@@ -1,4 +1,5 @@
 from db import get_connection
+from flask import jsonify
 from models.models import User, Book, Favourite, Bookmark
 
 class BookmarkService:
@@ -6,10 +7,10 @@ class BookmarkService:
     def create_bookmark(book_id, title, position):
         with get_connection() as session:
             bm = Bookmark(book_id=book_id, title=title, position=position)
-            bm.book_id = book_id
+            bm.position=position
             session.add(bm)
             session.commit()
-            return bm
+            return
     @staticmethod
     def get_bookmarks(book_id):
         with get_connection() as session:
