@@ -77,6 +77,7 @@ class Bookmark(Base):
         "Book",
         back_populates = "bookmarked_by"
     )
-    def __init__(self, title, position):
+    def __init__(self, book_id, title, position):
+        self.book_id = book_id
         self.title = title
         self.poistion = position

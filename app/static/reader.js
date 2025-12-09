@@ -68,6 +68,7 @@ class Reader {
     #saveTimeout = null
     #isSaving = false
     #minSaveInterval = 2000
+    
     #tocView
     style = {
         spacing: 1.4,
@@ -93,6 +94,8 @@ class Reader {
                 this.saveCurrentPosition()
             }
         })
+        document.getElementById("add-bookmark-button")
+        .addEventListener("click", () => this.addBookmark());
         
     }
 
@@ -174,6 +177,80 @@ async #saveFraction(fraction) {
     console.log(`Fraction saved: ${fraction}`)
 }
     
+
+async addBookmark() {
+    if (!this.view?.lastLocation || !this.#bookId) return
+
+    const pos = this.view.lastLocation.fraction
+    const title = prompt("Название закладки:", "Моя закладка")
+
+    if (!title) return
+    await fetch(`http://127.0.0.1:3000/bookmarks/${this.#bookId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, position: pos })
+    })
+
+    alert("Закладка сохранена!")
+    this.loadBookmarks()
+}
+
+async loadBookmarks() {
+    if (!this.#bookId) return
+
+    const response = await fetch(`http://localhost:3000/bookmarks/${this.#bookId}`)
+    const bookmarks = await response.json()
+
+    const container = document.getElementById("bookmark-list")
+    container.innerHTML = ""
+
+    bookmarks.forEach(b => {
+        const item = document.createElement("div")
+        item.className = "bookmark-item"
+        item.innerHTML = `
+            <span>${b.title}</span>
+            <button data-pos="${b.position}" class="jump">Перейти</button>
+            <button data-id="${b.id}" class="del">❌</button>
+        `
+        container.appendChild(item)
+    })
+
+    container.addEventListener("click", e => {
+        if (e.target.classList.contains("jump")) {
+            const pos = parseFloat(e.target.dataset.pos)
+            this.view.goToFraction(pos)
+            this.closeSideBar()
+        }
+        if (e.target.classList.contains("del")) {
+            this.deleteBookmark(e.target.dataset.id)
+        }
+    })
+}
+
+async deleteBookmark(id) {
+    await fetch(`http://localhost:3000/bookmarks/${id}`, {
+        method: "DELETE"
+    })
+
+    this.loadBookmarks()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     #schedulePositionSave(positionData) {
         // Отменяем предыдущий таймер
         if (this.#saveTimeout) {
@@ -257,6 +334,13 @@ async #saveFraction(fraction) {
         }
     }
     
+
+
+    
+
+
+
+
     #savePosition(reason) {
         if (!this.view?.lastLocation || !this.#bookId) return
         
@@ -274,6 +358,7 @@ async #saveFraction(fraction) {
 
     async open(file) {
         let savedLoc = null
+        await this.loadBookmarks()
         if (this.#bookId) {
             try {
                 const response = await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`)
@@ -401,11 +486,13 @@ async #saveFraction(fraction) {
     if (fraction != 1.0){this.view.goLeft()}
     
     // 7. Еще раз уточняем (иногда помогает)
-    setTimeout(() => {
-        this.view.goToFraction(fraction + 0.001).then(() => {
-            this.view.goToFraction(fraction - 0.001)
-        })
-    }, 100)
+
+    setTimeout(() => {this.view.goToFraction(fraction)},100)
+    // setTimeout(() => {
+    //     this.view.goToFraction(fraction + 0.001).then(() => {
+    //         this.view.goToFraction(fraction - 0.001)
+    //     })
+    // }, 100)
     }
 
     #handleKeydown(event) {
