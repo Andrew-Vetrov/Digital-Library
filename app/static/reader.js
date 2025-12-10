@@ -200,7 +200,7 @@ async addBookmark() {
 
     const title = prompt("Название закладки:", "Моя закладка")
     if (!title) return
-    await fetch(`http://127.0.0.1:3000/bookmarks/${this.#bookId}`, {
+    await fetch(`http://localhost:3000/bookmarks/${this.#bookId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, position: pos })
