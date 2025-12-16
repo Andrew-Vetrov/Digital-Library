@@ -3,6 +3,7 @@ from routes.auth_routes import auth_bp
 from routes.file_routes import file_bp
 from routes.favourite_routes import favourite_bp
 from routes.bookmark_routes import bookmark_bp
+from routes.note_routes import note_bp
 from services.favourites_service import FavoriteService
 from db import init_db
 from config import Config
@@ -15,6 +16,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(favourite_bp)
 app.register_blueprint(bookmark_bp)
+app.register_blueprint(note_bp)
 
 @app.route("/", methods=["GET", "POST"])
 def index():

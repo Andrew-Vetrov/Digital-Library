@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Float
+from sqlalchemy import Column, String, Integer, ForeignKey, Float, Text
 from sqlalchemy.orm import relationship
 from db import Base
 
@@ -58,6 +58,12 @@ class Book(Base):
         back_populates = "book",
         cascade="all, delete-orphan"
     )
+
+    noted_by = relationship(
+        "Note",
+        back_populates = "note",
+        cascade="all, delete-orphan"
+    )
     def __init__(self, title, author, language, genre, minio_key, cover_key=None):
         self.title = title
         self.author = author
@@ -80,4 +86,23 @@ class Bookmark(Base):
     def __init__(self, book_id, title, position):
         self.book_id = book_id
         self.title = title
+        self.position = position
+
+class Note(Base):
+    __tablename__ = "notes"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255), nullable=False)
+    book_id = Column(Integer, ForeignKey("books.id"), nullable=False)
+    position = Column(Float)
+    cfi = Column(String(500), nullable=True)  # CFI для точного позиционирования
+    selected_text = Column(Text, nullable=True)  # Выделенный текст
+    note = relationship(
+        "Book",
+        back_populates = "noted_by"
+    )
+    def __init__(self, book_id, title, position, selected_text, cfi):
+        self.book_id = book_id
+        self.title = title
         self.poistion = position
+        self.selected_text = selected_text
+        self.cfi = cfi

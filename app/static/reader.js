@@ -88,7 +88,7 @@ class Reader {
         })
         $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
         this.#bookId = this.#extractBookId()
-
+        //this.addNoteControls();
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.saveCurrentPosition()
@@ -96,9 +96,110 @@ class Reader {
         })
         document.getElementById("add-bookmark-button")
         .addEventListener("click", () => this.addBookmark());
+        document.getElementById("add-note-button")
+        .addEventListener("click", () => this.createNote());
+        
         
     }
 
+    showNotePopup(note) {
+        const popup = document.createElement('div')
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            z-index: 10001;
+            min-width: 300px;
+            max-width: 500px;
+        `
+        
+        popup.innerHTML = `
+            <h3 style="margin: 0 0 10px 0;">${note.title}</h3>
+            <div style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                ${new Date(note.created_at).toLocaleDateString()}
+            </div>
+            <div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
+                <strong>Выделенный текст:</strong><br>
+                "${note.selected_text || ''}"
+            </div>
+            <div style="margin-bottom: 20px;">
+                ${note.text || ''}
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button id="close-note-popup" style="
+                    padding: 8px 16px;
+                    background: #666;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Закрыть</button>
+            </div>
+        `
+        
+        document.body.appendChild(popup)
+        
+        popup.querySelector('#close-note-popup').addEventListener('click', () => {
+            document.body.removeChild(popup)
+        })
+        
+        // Закрытие по клику вне попапа
+        setTimeout(() => {
+            const closeHandler = (e) => {
+                if (!popup.contains(e.target)) {
+                    document.body.removeChild(popup)
+                    document.removeEventListener('click', closeHandler)
+                }
+            }
+            document.addEventListener('click', closeHandler)
+        }, 100)
+    }
+    addNoteControls() {
+        const noteButton = document.createElement('button')
+        noteButton.id = 'add-note-button'
+        noteButton.innerHTML = '📝 Заметка'
+        noteButton.style.cssText = `
+            position: fixed;
+            bottom: 80px;  // Поднял выше, чтобы не мешало закладкам
+            right: 20px;
+            padding: 10px 15px;
+            background: #FF9800;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            z-index: 9999;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            font-size: 14px;
+        `
+        
+        noteButton.addEventListener('click', async () => {
+            if (!this.view?.lastLocation?.cfi) {
+                alert('Выберите текст для заметки')
+                return
+            }
+            
+            const selection = window.getSelection()
+            const selectedText = selection.toString().trim()
+            
+            if (!selectedText) {
+                alert('Выделите текст для заметки')
+                return
+            }
+            
+            const noteText = prompt('Введите текст заметки:', selectedText)
+            if (noteText) {
+                await this.view.addNote(this.view.lastLocation.cfi, noteText)
+            }
+        })
+        
+        document.body.appendChild(noteButton)
+    }
     #extractBookId() {
         // Вариант 1: Из data-атрибута
         const appElement = document.getElementById('app')
@@ -351,7 +452,273 @@ async deleteBookmark(id) {
     
 
 
+ async createNote() {
+    if (!this.view?.lastLocation || !this.#bookId) return
     
+    // Тот же трюк для позиционирования
+    this.view.goLeft()
+    this.view.style.opacity = '0'
+    this.view.style.pointerEvents = 'none'
+
+    this.view.goLeft()
+    await new Promise(r => setTimeout(r, 1000))
+    const pos = this.view.lastLocation.fraction
+    await new Promise(r => setTimeout(r, 30))
+    this.view.goRight()
+    await new Promise(r => setTimeout(r, 30))
+    const danil = this.view.lastLocation.fraction
+    console.log("pos = " + pos)
+    
+    this.view.style.opacity = '1'
+    this.view.style.pointerEvents = 'auto'
+
+    // Получаем выделенный текст
+    const selectedText = this.getSelectedText()
+    console.log("Выделенный текст:", selectedText)
+    
+    if (!selectedText) {
+        alert("Выделите текст для заметки!")
+        return
+    }
+    
+    // Получаем CFI ВЫДЕЛЕНИЯ, а не страницы
+    const selectionCFI = this.getSelectionCFI()
+    console.log("CFI выделения:", selectionCFI)
+    
+    // Используем CFI выделения если есть, иначе позицию страницы
+    const cfi = selectionCFI || this.view.lastLocation.cfi
+    
+    // Только название - текст заметки будет выделенный текст
+    const title = prompt("Название заметки:", selectedText.substring(0, 30))
+    if (!title) return
+    
+    // Текст заметки = выделенный текст
+    const noteText = selectedText
+    
+    console.log("Отправляю заметку...")
+    console.log("Title:", title)
+    console.log("Text (выделенный):", noteText)
+    console.log("CFI:", cfi)
+    console.log("Position:", pos)
+    
+    try {
+        const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                title, 
+                position: pos, 
+                text: noteText,
+                selected_text: selectedText,
+                cfi: cfi,
+                color: 'yellow' 
+            })
+        })
+        
+        if (!response.ok) {
+            const errorText = await response.text()
+            console.error('Ошибка сервера:', response.status, errorText)
+            alert(`Ошибка сервера: ${response.status}`)
+            return
+        }
+        
+        const createdNote = await response.json()
+        console.log("Создана заметка:", createdNote)
+        
+        if (createdNote.id && this.view?.addNoteHighlight) {
+            console.log("Добавляю выделение...")
+            await this.view.addNoteHighlight(createdNote)
+        }
+        
+        // Обновляем список
+        await this.loadNotes()
+        
+        alert("✅ Заметка сохранена!")
+        
+    } catch (error) {
+        console.error("Ошибка создания заметки:", error)
+        alert(`Ошибка: ${error.message}`)
+    }
+}
+
+getSelectedText() {
+    console.log('=== getSelectedText ===')
+    
+    // Способ 1: Пробуем получить из всех iframe
+    const contents = this.view?.renderer?.getContents()
+    if (contents && contents.length > 0) {
+        for (const content of contents) {
+            if (content.doc) {
+                const selection = content.doc.getSelection()
+                console.log('Selection в документе:', selection)
+                if (selection && selection.rangeCount > 0) {
+                    const selectedText = selection.toString().trim()
+                    console.log('Выделенный текст из iframe:', selectedText)
+                    if (selectedText) {
+                        return selectedText
+                    }
+                }
+            }
+        }
+    }
+    
+    // Способ 2: Пробуем из window (если выделение вне iframe)
+    const windowSelection = window.getSelection()
+    console.log('Selection в window:', windowSelection)
+    if (windowSelection && windowSelection.rangeCount > 0) {
+        const selectedText = windowSelection.toString().trim()
+        console.log('Выделенный текст из window:', selectedText)
+        if (selectedText) {
+            return selectedText
+        }
+    }
+    
+    console.log('Не найдено выделенного текста')
+    return ''
+}
+
+// Метод для получения текущего выделения (Range)
+getCurrentSelection() {
+    const contents = this.view?.renderer?.getContents()
+    if (contents && contents.length > 0) {
+        for (const content of contents) {
+            if (content.doc) {
+                const selection = content.doc.getSelection()
+                if (selection && selection.rangeCount > 0) {
+                    return selection.getRangeAt(0)
+                }
+            }
+        }
+    }
+    
+    const windowSelection = window.getSelection()
+    if (windowSelection && windowSelection.rangeCount > 0) {
+        return windowSelection.getRangeAt(0)
+    }
+    
+    return null
+}
+
+// Метод для получения CFI выделения
+getSelectionCFI() {
+    const contents = this.view?.renderer?.getContents()
+    if (!contents || contents.length === 0) {
+        console.log('Нет загруженных страниц')
+        return null
+    }
+    
+    for (const content of contents) {
+        if (content.doc) {
+            const selection = content.doc.getSelection()
+            if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+                try {
+                    const range = selection.getRangeAt(0)
+                    console.log('Нашел выделение в документе')
+                    console.log('Range:', range.toString())
+                    
+                    // Получаем CFI для этого range
+                    const cfi = this.view.getCFI(content.index, range)
+                    console.log('CFI выделения:', cfi)
+                    return cfi
+                } catch (e) {
+                    console.error('Ошибка получения CFI выделения:', e)
+                }
+            }
+        }
+    }
+    
+    console.log('Не найдено активного выделения')
+    return null
+}
+
+async loadNotes() {
+    if (!this.#bookId) return
+
+    const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
+    
+    if (!response.ok) {
+        console.error("Failed to load notes")
+        return
+    }
+    
+    const notes = await response.json()
+    console.log('Загружено заметок:', notes.length)
+
+    // ЗАГРУЖАЕМ ЗАМЕТКИ В VIEW (без аннотаций, просто для хранения)
+    if (this.view) {
+        this.view.loadNotesForBook(this.#bookId, notes)
+    }
+    
+    const container = document.getElementById("notes-list")
+    if (!container) return
+    
+    container.innerHTML = ""
+
+    notes.forEach(n => {
+        const item = document.createElement("div")
+        item.className = "note-item"
+        item.innerHTML = `
+            <div class="note-header">
+                <strong>${n.title}</strong>
+                <span class="note-position">${Math.round(n.position * 100)}%</span>
+            </div>
+            <div class="note-preview">${n.selected_text || n.text?.substring(0, 50) || ''}...</div>
+            <div class="note-actions">
+                <button data-pos="${n.position}" data-id="${n.id}" data-cfi="${n.cfi || ''}" class="jump">Перейти</button>
+                <button data-id="${n.id}" class="del">❌</button>
+            </div>
+        `
+        container.appendChild(item)
+    })
+
+    container.addEventListener("click", e => {
+        if (e.target.classList.contains("jump")) {
+            const pos = parseFloat(e.target.dataset.pos)
+            const noteId = e.target.dataset.id
+            const cfi = e.target.dataset.cfi
+            
+            // Используем CFI для точного перехода
+            if (cfi) {
+                this.view.goTo(cfi)
+            } else if (pos) {
+                this.view.goToFraction(pos)
+            }
+            this.closeSideBar()
+        }
+        if (e.target.classList.contains("del")) {
+            this.deleteNote(e.target.dataset.id)
+        }
+    })
+
+    return notes
+}
+
+async getNotesData() {
+    if (!this.#bookId) return []
+    
+    try {
+        const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
+        if (!response.ok) return []
+        return await response.json()
+    } catch (error) {
+        console.error('Ошибка загрузки заметок:', error)
+        return []
+    }
+}
+
+async deleteNote(id) {
+    await fetch(`http://localhost:3000/notes/${id}`, {
+        method: "DELETE"
+    })
+
+    // УДАЛЯЕМ ВЫДЕЛЕНИЕ ИЗ VIEW
+    this.view.removeNoteHighlight(parseInt(id))
+    
+    // ПЕРЕЗАГРУЖАЕМ СПИСОК
+    await this.loadNotes()
+}
 
 
 
@@ -374,6 +741,8 @@ async deleteBookmark(id) {
     async open(file) {
         let savedLoc = null
         await this.loadBookmarks()
+        await this.loadNotes()
+        
         if (this.#bookId) {
             try {
                 const response = await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`)
@@ -390,7 +759,39 @@ async deleteBookmark(id) {
         }
         this.view = document.createElement('diglib-view')
         document.body.append(this.view)
+        this.view.addEventListener('load', async () => {
+            console.log('Книга загружена, загружаю заметки...')
+            
+            if (this.#bookId) {
+                // Ждем немного чтобы view успел инициализироваться
+                setTimeout(async () => {
+                    const notes = await this.loadNotes()
+                    const notesData = await this.getNotesData()
+                    console.log('Загружено заметок из БД:', notes.length)
+                    
+                    if (notes.length > 0 && this.view.loadNotesForBook) {
+                        // Загружаем заметки в view
+                        await this.view.loadNotesForBook(this.#bookId, notesData)
+                        
+                        // Принудительно перерисовываем заметки на текущей странице
+                        if (this.view.renderer?.getContents) {
+                            const contents = this.view.renderer.getContents()
+                            if (contents.length > 0) {
+                                const { index, doc } = contents[0]
+                                if (this.view.renderNotesForPage) {
+                                    this.view.renderNotesForPage(index, doc)
+                                }
+                            }
+                        }
+                    }
+                }, 1000)
+            }
+        })
         await this.view.open(file)
+        this.view.addEventListener('show-note', (e) => {
+            const { note } = e.detail
+            this.showNotePopup(note)
+        })
         this.view.addEventListener('load', this.#onLoad.bind(this))
         this.view.addEventListener('relocate', this.#onRelocate.bind(this))
 

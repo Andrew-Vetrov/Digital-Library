@@ -210,6 +210,81 @@ body {
 #toc-view [aria-expanded="false"] + [role="group"] {
     display: none;
 }
+
+#notes-section {
+    padding: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, .1);
+    border-bottom: 1px solid rgba(0, 0, 0, .1);
+}
+#notes-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+.note-item {
+    background: white;
+    border-left: 4px solid #FF9800;
+    margin: 8px 0;
+    padding: 12px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.note-item:hover {
+    background: #f9f9f9;
+    transform: translateX(2px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+.note-position {
+    font-size: 12px;
+    color: #666;
+    background: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+.note-preview {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 8px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.note-actions {
+    display: flex;
+    gap: 8px;
+}
+.note-actions button {
+    padding: 4px 10px;
+    font-size: 12px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.note-actions .jump {
+    background: #4CAF50;
+    color: white;
+}
+.note-actions .jump:hover {
+    background: #45a049;
+}
+.note-actions .del {
+    background: #f44336;
+    color: white;
+}
+.note-actions .del:hover {
+    background: #da190b;
+}
 .menu-container {
     position: relative;
 }
@@ -271,22 +346,39 @@ body {
         </div>
     </div>
     <div id="toc-view"></div>
+    
+    <!-- СЕКЦИЯ ЗАМЕТОК -->
+    <div id="notes-section">
+        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📝 Заметки</h3>
+        <div id="notes-list"></div>
+    </div>
+    
+    <!-- СЕКЦИЯ ЗАКЛАДОК -->
+    <div style="padding: 1rem;">
+        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">🔖 Закладки</h3>
+        <div id="bookmark-list"></div>
+    </div>
 </div>
-<div id="header-bar" class="toolbar">
-    <button id="add-bookmark-button">🔖</button>
-    <div class="mt-4">
-    <div id="bookmark-list"></div>
 
-</div>
+<div id="header-bar" class="toolbar">
+    <!-- КНОПКА ДЛЯ ЗАМЕТОК -->
+    <button id="add-note-button" title="Добавить заметку">📝</button>
+    
+    <!-- КНОПКА ДЛЯ ЗАКЛАДОК -->
+    <button id="add-bookmark-button" title="Добавить закладку">🔖</button>
+    
+    <!-- КНОПКА БОКОВОЙ ПАНЕЛИ -->
     <button id="side-bar-button" aria-label="Show sidebar">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
         </svg>
     </button>
+    
     <div id="menu-button" class="menu-container">
         
     </div>
 </div>
+
 <div id="nav-bar" class="toolbar">
     <button id="left-button" aria-label="Go left">
         <svg class="icon" width="24" height="24" aria-hidden="true">

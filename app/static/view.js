@@ -6,6 +6,8 @@ import { textWalker } from './text-walker.js'
 
 const SEARCH_PREFIX = 'diglib-search:'
 
+const NOTE_PREFIX = 'diglib-note:'
+
 const isZip = async file => {
     const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer())
     return arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
@@ -191,6 +193,7 @@ export class View extends HTMLElement {
     #tocProgress
     #pageProgress
     #searchResults = new Map()
+    #notes = new Map() 
     #cursorAutohider = new CursorAutohider(this, () =>
         this.hasAttribute('autohide-cursor'))
     isFixedLayout = false
@@ -203,7 +206,180 @@ export class View extends HTMLElement {
             this.renderer.goTo(resolved)
         })
     }
+    
 
+   async loadNotesForBook(bookId, notes) {  // параметр notes определен
+        console.log('=== loadNotesForBook ===')
+        console.log('Book ID:', bookId)
+        console.log('Notes:', notes)  // должно быть определено
+        
+        // ПРОВЕРКА: если notes undefined
+        if (!notes) {
+            console.error('notes is undefined!')
+            return
+        }
+        
+        if (!Array.isArray(notes)) {
+            console.error('notes не массив:', typeof notes, notes)
+            return
+        }
+        
+        console.log('Notes count:', notes.length)
+        
+        // Сохраняем заметки
+        this.#notes = new Map()
+        
+        notes.filter(n => n && n.id && n.cfi).forEach(note => {
+            this.#notes.set(note.id, note)
+            console.log(`Сохранена заметка ${note.id}: ${note.title}`)
+        })
+        
+        console.log(`Загружено ${this.#notes.size} заметок`)
+    }
+
+
+    async renderExistingNotes() {
+        if (!this.#notes || this.#notes.size === 0) {
+            console.log('Нет заметок для отрисовки')
+            return
+        }
+        
+        console.log('Отрисовываю существующие заметки:', this.#notes.size)
+        
+        // Получаем текущие contents
+        const contents = this.renderer?.getContents?.()
+        if (!contents || contents.length === 0) {
+            console.log('Нет загруженных contents')
+            return
+        }
+        
+        for (const note of this.#notes.values()) {
+            if (note.cfi) {
+                try {
+                    console.log('Пробую отрисовать заметку:', note.id, 'CFI:', note.cfi)
+                    await this.addNoteHighlight(note)
+                } catch (e) {
+                    console.error('Ошибка отрисовки заметки', note.id, ':', e)
+                }
+            }
+        }
+    }
+    // Добавляем заметки в overlayer когда он создается
+    #createOverlayer({ doc, index }) {
+        const overlayer = new Overlayer()
+        
+        // ДОБАВЛЯЕМ СУЩЕСТВУЮЩИЕ ЗАМЕТКИ ДЛЯ ЭТОЙ СТРАНИЦЫ
+        this.#notes.forEach(note => {
+            if (note.cfi) {
+                try {
+                    const resolved = this.resolveCFI(note.cfi)
+                    if (resolved && resolved.index === index) {
+                        const range = resolved.anchor(doc)
+                        overlayer.add(`note:${note.id}`, range, Overlayer.highlight, {
+                            color: note.color || 'yellow',
+                            opacity: 0.3
+                        })
+                    }
+                } catch (e) {
+                    console.error('Failed to render note:', e)
+                }
+            }
+        })
+        
+        doc.addEventListener('click', e => {
+            const [value, range] = overlayer.hitTest(e)
+            if (value && value.startsWith('note:')) {
+                const noteId = value.replace('note:', '')
+                const note = this.#notes.get(parseInt(noteId))
+                if (note) {
+                    this.#emit('show-note', { note, range, index })
+                }
+            }
+        }, false)
+
+        this.#emit('create-overlay', { index })
+        return overlayer
+    }
+
+    // Метод для добавления новой заметки
+   async addNoteHighlight(note) {
+        if (!note?.id || !note?.cfi) {
+            console.log('Нет данных заметки для выделения')
+            return false
+        }
+        
+        console.log('Добавляю выделение для заметки:', note.id)
+        
+        try {
+            // Получаем CFI заметки
+            const resolved = this.resolveCFI(note.cfi)
+            if (!resolved) {
+                console.log('Не удалось распарсить CFI:', note.cfi)
+                return false
+            }
+            
+            console.log('Resolved CFI - index:', resolved.index)
+            
+            // Получаем overlayer для этой страницы
+            const contents = this.renderer?.getContents?.()
+            if (!contents) {
+                console.log('Нет contents в renderer')
+                return false
+            }
+            
+            // Ищем нужный content по index
+            const content = contents.find(c => c.index === resolved.index)
+            if (!content || !content.overlayer) {
+                console.log('Не найден overlayer для страницы', resolved.index)
+                return false
+            }
+            
+            // Получаем документ и range
+            const doc = content.doc
+            if (!doc) {
+                console.log('Нет документа для страницы', resolved.index)
+                return false
+            }
+            
+            const range = resolved.anchor(doc)
+            if (!range) {
+                console.log('Не удалось получить range из CFI')
+                return false
+            }
+            
+            console.log('Range получен, добавляю в overlayer')
+            
+            // Добавляем выделение
+            content.overlayer.add(`note:${note.id}`, range, Overlayer.highlight, {
+                color: 'yellow',
+                opacity: 0.3
+            })
+            
+            // Сохраняем в мапе
+            if (!this.#notes) this.#notes = new Map()
+            this.#notes.set(note.id, note)
+            
+            console.log('Выделение добавлено для заметки', note.id)
+            return true
+            
+        } catch (error) {
+            console.error('Ошибка добавления выделения:', error)
+            return false
+        }
+    }
+
+    // Метод для удаления выделения заметки
+    removeNoteHighlight(noteId) {
+        this.#notes.delete(noteId)
+        
+        // Удаляем из всех overlayers
+        const contents = this.renderer.getContents()
+        contents.forEach(content => {
+            if (content.overlayer) {
+                content.overlayer.remove(`note:${noteId}`)
+            }
+        })
+    }
     convertLocToPosition(locNumber, totalLocs = null) {
         if (!this.#sectionProgress) {
             return { index: 0, anchor: 0 }
@@ -226,6 +402,51 @@ export class View extends HTMLElement {
         }
     }
 
+    renderNotesForCurrentPage(doc, pageIndex) {
+        console.log(`Отрисовка заметок для страницы ${pageIndex}`)
+        
+        if (!this.#notes || this.#notes.size === 0) {
+            console.log('Нет заметок в кэше')
+            return
+        }
+        
+        const contents = this.renderer?.getContents?.()
+        const content = contents?.find(c => c.index === pageIndex)
+        
+        if (!content || !content.overlayer) {
+            console.log('Нет overlayer для этой страницы')
+            return
+        }
+        
+        let rendered = 0
+        
+        // Ищем заметки которые относятся к этой странице
+        this.#notes.forEach((note, noteId) => {
+            if (note.cfi) {
+                try {
+                    const resolved = this.resolveCFI(note.cfi)
+                    if (resolved && resolved.index === pageIndex) {
+                        const range = resolved.anchor(doc)
+                        if (range) {
+                            // Добавляем выделение
+                            content.overlayer.add(`note:${noteId}`, range, Overlayer.highlight, {
+                                color: note.color || 'yellow',
+                                opacity: 0.3
+                            })
+                            rendered++
+                            console.log(`✅ Заметка ${noteId} отрисована`)
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Ошибка отрисовки заметки ${noteId}:`, e)
+                }
+            }
+        })
+        
+        if (rendered > 0) {
+            console.log(`Отрисовано ${rendered} заметок на странице ${pageIndex}`)
+        }
+    }
     async open(book) {
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
@@ -341,6 +562,8 @@ export class View extends HTMLElement {
         this.#handleLinks(doc, index)
         this.#cursorAutohider.cloneFor(doc.documentElement)
 
+        this.renderNotesForCurrentPage(doc, index)
+
         this.#emit('load', { doc, index })
     }
     #handleLinks(doc, index) {
@@ -399,21 +622,21 @@ export class View extends HTMLElement {
         return this.renderer.getContents()
             .find(x => x.index === index && x.overlayer)
     }
-    #createOverlayer({ doc, index }) {
-        const overlayer = new Overlayer()
-        doc.addEventListener('click', e => {
-            const [value, range] = overlayer.hitTest(e)
-            if (value && !value.startsWith(SEARCH_PREFIX)) {
-                this.#emit('show-annotation', { value, index, range })
-            }
-        }, false)
+    // #createOverlayer({ doc, index }) {
+    //     const overlayer = new Overlayer()
+    //     doc.addEventListener('click', e => {
+    //         const [value, range] = overlayer.hitTest(e)
+    //         if (value && !value.startsWith(SEARCH_PREFIX)) {
+    //             this.#emit('show-annotation', { value, index, range })
+    //         }
+    //     }, false)
 
-        const list = this.#searchResults.get(index)
-        if (list) for (const item of list) this.addAnnotation(item)
+    //     const list = this.#searchResults.get(index)
+    //     if (list) for (const item of list) this.addAnnotation(item)
 
-        this.#emit('create-overlay', { index })
-        return overlayer
-    }
+    //     this.#emit('create-overlay', { index })
+    //     return overlayer
+    // }
     async showAnnotation(annotation) {
         const { value } = annotation
         const resolved = await this.goTo(value)
