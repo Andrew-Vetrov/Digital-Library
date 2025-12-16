@@ -88,6 +88,7 @@ class Reader {
         })
         $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
         this.#bookId = this.#extractBookId()
+        this.setupSidebarTabs();
         //this.addNoteControls();
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
@@ -102,6 +103,31 @@ class Reader {
         
     }
 
+    setupSidebarTabs() {
+        const tabButtons = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+        
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.dataset.tab;
+                
+                // Убираем активный класс у всех кнопок и контента
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+                
+                // Добавляем активный класс текущей кнопке и соответствующему контенту
+                button.classList.add('active');
+                document.getElementById(`${tabId}-tab`).classList.add('active');
+                
+                // При переключении на заметки или закладки, загружаем их если нужно
+                if (tabId === 'notes') {
+                    this.loadNotes();
+                } else if (tabId === 'bookmarks') {
+                    this.loadBookmarks();
+                }
+            });
+        });
+    }
     showNotePopup(note) {
         const popup = document.createElement('div')
         popup.style.cssText = `
@@ -318,18 +344,26 @@ async loadBookmarks() {
     const bookmarks = await response.json()
 
     const container = document.getElementById("bookmark-list")
+    if (!container) return
+    
     container.innerHTML = ""
+
+    if (bookmarks.length === 0) {
+        container.innerHTML = '<div class="empty-state">Нет закладок</div>'
+        return
+    }
 
     bookmarks.forEach(b => {
         const item = document.createElement("div")
         item.className = "bookmark-item"
         item.innerHTML = `
-            <div class="note-actions">
-            <strong>${b.title}</strong>
+            <div class="bookmark-header">
+                <strong>${b.title || 'Закладка'}</strong>
+                <span class="bookmark-position">${Math.round(b.position * 100)}%</span>
             </div>
-            <div class="note-actions">
-            <button data-pos="${b.position}" class="jump">Перейти</button>
-            <button data-id="${b.id}" class="del">❌</button>
+            <div class="bookmark-actions">
+                <button data-pos="${b.position}" data-id="${b.id}" class="jump">Перейти</button>
+                <button data-id="${b.id}" class="del">❌</button>
             </div>
         `
         container.appendChild(item)
@@ -653,7 +687,8 @@ async loadNotes() {
     const notes = await response.json()
     console.log('Загружено заметок:', notes.length)
 
-    // ЗАГРУЖАЕМ ЗАМЕТКИ В VIEW (без аннотаций, просто для хранения)
+    
+    // ЗАГРУЖАЕМ ЗАМЕТКИ В VIEW (для подсветки в тексте)
     if (this.view) {
         this.view.loadNotesForBook(this.#bookId, notes)
     }
@@ -661,8 +696,12 @@ async loadNotes() {
     const container = document.getElementById("notes-list")
     if (!container) return
     
-    container.innerHTML = ""
+    if (notes.length === 0) {
+        container.innerHTML = '<div class="empty-state">Нет заметок</div>'
+        return
+    }
 
+    container.innerHTML = ""
     notes.forEach(n => {
         const item = document.createElement("div")
         item.className = "note-item"
@@ -686,7 +725,6 @@ async loadNotes() {
             const noteId = e.target.dataset.id
             const cfi = e.target.dataset.cfi
             
-            // Используем CFI для точного перехода
             if (cfi) {
                 this.view.goTo(cfi)
             } else if (pos) {
