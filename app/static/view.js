@@ -303,6 +303,7 @@ export class View extends HTMLElement {
 
     // Метод для добавления новой заметки
    async addNoteHighlight(note) {
+
         if (!note?.id || !note?.cfi) {
             console.log('Нет данных заметки для выделения')
             return false

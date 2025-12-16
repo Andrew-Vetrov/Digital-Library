@@ -121,7 +121,7 @@ class Reader {
         popup.innerHTML = `
             <h3 style="margin: 0 0 10px 0;">${note.title}</h3>
             <div style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                ${new Date(note.created_at).toLocaleDateString()}
+                Романкин, Данил Романкин
             </div>
             <div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
                 <strong>Выделенный текст:</strong><br>
@@ -454,32 +454,35 @@ async deleteBookmark(id) {
 
  async createNote() {
     if (!this.view?.lastLocation || !this.#bookId) return
-    
+    // Получаем выделенный текст
+    const selectedText = this.getSelectedText()
+    console.log("Выделенный текст:", selectedText)
+    console.log(selectedText.length)
+    if (!selectedText) {
+        alert("Выделите текст для заметки!")
+        return
+    }
+    if (selectedText.length > 3000) {
+        return
+    }
     // Тот же трюк для позиционирования
-    this.view.goLeft()
+    /*this.view.goLeft()
     this.view.style.opacity = '0'
     this.view.style.pointerEvents = 'none'
 
     this.view.goLeft()
-    await new Promise(r => setTimeout(r, 1000))
+    await new Promise(r => setTimeout(r, 1000))*/
     const pos = this.view.lastLocation.fraction
-    await new Promise(r => setTimeout(r, 30))
+    /*await new Promise(r => setTimeout(r, 30))
     this.view.goRight()
     await new Promise(r => setTimeout(r, 30))
     const danil = this.view.lastLocation.fraction
     console.log("pos = " + pos)
     
     this.view.style.opacity = '1'
-    this.view.style.pointerEvents = 'auto'
+    this.view.style.pointerEvents = 'auto'*/
 
-    // Получаем выделенный текст
-    const selectedText = this.getSelectedText()
-    console.log("Выделенный текст:", selectedText)
     
-    if (!selectedText) {
-        alert("Выделите текст для заметки!")
-        return
-    }
     
     // Получаем CFI ВЫДЕЛЕНИЯ, а не страницы
     const selectionCFI = this.getSelectionCFI()
@@ -759,11 +762,13 @@ async deleteNote(id) {
         }
         this.view = document.createElement('diglib-view')
         document.body.append(this.view)
+        
         this.view.addEventListener('load', async () => {
             console.log('Книга загружена, загружаю заметки...')
             
             if (this.#bookId) {
                 // Ждем немного чтобы view успел инициализироваться
+                
                 setTimeout(async () => {
                     const notes = await this.loadNotes()
                     const notesData = await this.getNotesData()
