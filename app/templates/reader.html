@@ -67,26 +67,85 @@ body {
     z-index: 1;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     width: 100%;
     height: 48px;
-    padding: 6px;
+    padding: 6px 12px;
     transition: opacity 250ms ease;
     visibility: hidden;
 }
+
 .toolbar button {
-    padding: 3px;
+    padding: 8px 12px; /* Увеличил padding для удобства */
     border-radius: 6px;
     background: none;
     border: 0;
     color: GrayText;
+    cursor: pointer;
+    font-size: 16px; /* Увеличил размер иконок/текста */
 }
+
 .toolbar button:hover {
     background: rgba(0, 0, 0, .1);
     color: currentcolor;
 }
+
 #header-bar {
     top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Левая часть - кнопка боковой панели */
+#header-bar .toolbar-left {
+    flex: 1;
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+}
+
+/* Центральная часть - кнопка "назад" и закладки */
+#header-bar .toolbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px; /* Расстояние между кнопками в центре */
+}
+
+/* Правая часть - кнопка заметок */
+#header-bar .toolbar-right {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Стиль для кнопки "Назад" */
+.back-btn {
+    padding: 6px 16px !important; /* Больше padding для прямоугольника */
+    background-color: #f0f0f0 !important; /* Серый фон */
+    border: 1px solid #ccc !important; /* Граница */
+    border-radius: 4px !important; /* Скругленные углы */
+    color: #333 !important; /* Темный текст */
+    font-weight: 500 !important; /* Полужирный текст */
+    font-size: 14px !important;
+    min-width: 60px; /* Минимальная ширина */
+    text-align: center;
+    transition: all 0.2s ease !important;
+}
+
+.back-btn:hover {
+    background-color: #e0e0e0 !important; /* Темнее при наведении */
+    border-color: #999 !important;
+    transform: translateY(-1px); /* Легкий подъем */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+.back-btn:active {
+    background-color: #d0d0d0 !important;
+    transform: translateY(0); /* Убираем подъем при нажатии */
+    box-shadow: none !important;
 }
 #nav-bar {
     bottom: 0;
@@ -118,6 +177,7 @@ body {
     transform: translateX(0);
     transition-delay: 0s;
 }
+
 #dimming-overlay {
     visibility: hidden;
     position: fixed;
@@ -211,45 +271,98 @@ body {
     display: none;
 }
 
-#notes-section {
+/* Обновленные стили для заметок и закладок */
+#notes-section, #bookmarks-section {
     padding: 1rem;
     border-top: 1px solid rgba(0, 0, 0, .1);
     border-bottom: 1px solid rgba(0, 0, 0, .1);
+    max-height: 250px; /* Ограничение высоты секций */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Скрываем выходящее за границы */
 }
-#notes-list {
-    max-height: 300px;
-    overflow-y: auto;
+
+#notes-section h3, #bookmarks-section h3 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 16px;
+    flex-shrink: 0; /* Заголовок не сжимается */
+}
+
+#notes-list, #bookmark-list {
+    flex: 1;
+    overflow-y: auto; /* Добавляем скролл */
+    overflow-x: hidden;
     margin-top: 10px;
+    min-height: 50px;
 }
-.note-item {
+
+/* Кастомный скроллбар для списков */
+#notes-list::-webkit-scrollbar,
+#bookmark-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#notes-list::-webkit-scrollbar-track,
+#bookmark-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#notes-list::-webkit-scrollbar-thumb,
+#bookmark-list::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+#notes-list::-webkit-scrollbar-thumb:hover,
+#bookmark-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.note-item, .bookmark-item {
     background: white;
-    border-left: 4px solid #FF9800;
     margin: 8px 0;
     padding: 12px;
     border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     cursor: pointer;
     transition: all 0.2s ease;
+    word-break: break-word; /* Перенос длинных слов */
 }
-.note-item:hover {
+
+.note-item:hover, .bookmark-item:hover {
     background: #f9f9f9;
     transform: translateX(2px);
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
-.note-header {
+
+
+/* Специфичные цвета для заметок и закладок */
+.note-item {
+    border-left: 4px solid #FF9800; /* Оранжевый для заметок */
+}
+
+.bookmark-item {
+    border-left: 4px solid #2196F3; /* Синий для закладок */
+}
+
+.note-header, .bookmark-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 5px;
 }
-.note-position {
+
+.note-position, .bookmark-position {
     font-size: 12px;
     color: #666;
     background: #f0f0f0;
     padding: 2px 6px;
     border-radius: 10px;
 }
-.note-preview {
+
+.note-preview, .bookmark-preview {
     font-size: 13px;
     color: #555;
     margin-bottom: 8px;
@@ -259,11 +372,13 @@ body {
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.note-actions {
+
+.note-actions, .bookmark-actions {
     display: flex;
     gap: 8px;
 }
-.note-actions button {
+
+.note-actions button, .bookmark-actions button {
     padding: 4px 10px;
     font-size: 12px;
     border: none;
@@ -271,20 +386,37 @@ body {
     cursor: pointer;
     transition: background 0.2s;
 }
-.note-actions .jump {
+
+.note-actions .jump, .bookmark-actions .jump {
     background: #4CAF50;
     color: white;
 }
-.note-actions .jump:hover {
+
+.note-actions .jump:hover, .bookmark-actions .jump:hover {
     background: #45a049;
 }
-.note-actions .del {
+
+.note-actions .del, .bookmark-actions .del {
     background: #f44336;
     color: white;
 }
-.note-actions .del:hover {
+
+.note-actions .del:hover, .bookmark-actions .del:hover {
     background: #da190b;
 }
+
+/* Стили для пустых списков */
+.empty-state {
+    color: #999;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .menu-container {
     position: relative;
 }
@@ -349,32 +481,38 @@ body {
     
     <!-- СЕКЦИЯ ЗАМЕТОК -->
     <div id="notes-section">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📝 Заметки</h3>
+        <h3>📝 Заметки</h3>
         <div id="notes-list"></div>
     </div>
     
     <!-- СЕКЦИЯ ЗАКЛАДОК -->
-    <div style="padding: 1rem;">
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">🔖 Закладки</h3>
+    <div id="bookmarks-section">
+        <h3>🔖 Закладки</h3>
         <div id="bookmark-list"></div>
     </div>
 </div>
 
 <div id="header-bar" class="toolbar">
-    <!-- КНОПКА ДЛЯ ЗАМЕТОК -->
-    <button id="add-note-button" title="Добавить заметку">📝</button>
+    <!-- ЛЕВАЯ ЧАСТЬ -->
+    <div class="toolbar-left">
+        <button id="side-bar-button" aria-label="Show sidebar" title="Боковая панель">
+            <svg class="icon" width="24" height="24" aria-hidden="true">
+                <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
+            </svg>
+        </button>
+    </div>
     
-    <!-- КНОПКА ДЛЯ ЗАКЛАДОК -->
-    <button id="add-bookmark-button" title="Добавить закладку">🔖</button>
+    <!-- ЦЕНТРАЛЬНАЯ ЧАСТЬ -->
+    <div class="toolbar-center">
+        <a href="http://localhost:3000/files" class="back-link-wrapper">
+        <button class="back-btn" title="Вернуться в библиотеку">Назад</button>
+        </a>
+        <button id="add-bookmark-button" title="Добавить закладку">🔖</button>
+    </div>
     
-    <!-- КНОПКА БОКОВОЙ ПАНЕЛИ -->
-    <button id="side-bar-button" aria-label="Show sidebar">
-        <svg class="icon" width="24" height="24" aria-hidden="true">
-            <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
-        </svg>
-    </button>
-    
-    <div id="menu-button" class="menu-container">
+    <!-- ПРАВАЯ ЧАСТЬ -->
+    <div class="toolbar-right">
+        <button id="add-note-button" title="Добавить заметку">📝</button>
         
     </div>
 </div>

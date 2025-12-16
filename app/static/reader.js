@@ -324,9 +324,13 @@ async loadBookmarks() {
         const item = document.createElement("div")
         item.className = "bookmark-item"
         item.innerHTML = `
-            <span>${b.title}</span>
+            <div class="note-actions">
+            <strong>${b.title}</strong>
+            </div>
+            <div class="note-actions">
             <button data-pos="${b.position}" class="jump">Перейти</button>
             <button data-id="${b.id}" class="del">❌</button>
+            </div>
         `
         container.appendChild(item)
     })
