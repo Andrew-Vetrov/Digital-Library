@@ -922,7 +922,7 @@ async deleteNote(id) {
             // Ждем немного пока книга загрузится
             setTimeout(() => {
                 this.#restorePosition(savedLoc)
-            }, 500)
+            }, 1000)
         } else {
             this.view.renderer.next()
         }

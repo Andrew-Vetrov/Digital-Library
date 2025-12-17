@@ -196,6 +196,8 @@ export class View extends HTMLElement {
     #notes = new Map() 
     #cursorAutohider = new CursorAutohider(this, () =>
         this.hasAttribute('autohide-cursor'))
+    #notesLoaded = false // Флаг, что заметки загружены
+    #notesRendered = new Set() 
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -233,10 +235,68 @@ export class View extends HTMLElement {
             this.#notes.set(note.id, note)
             console.log(`Сохранена заметка ${note.id}: ${note.title}`)
         })
+        this.#notesLoaded = true
         
         console.log(`Загружено ${this.#notes.size} заметок`)
+
+        this.renderNotesOnCurrentPage()
     }
 
+    async renderNotesOnCurrentPage() {
+        if (!this.#notesLoaded || this.#notes.size === 0) {
+            console.log('Нет заметок для отрисовки')
+            return
+        }
+        
+        const contents = this.renderer?.getContents?.()
+        if (!contents || contents.length === 0) {
+            console.log('Нет загруженных contents, ждем...')
+            // Ждем немного и пробуем снова
+            setTimeout(() => this.renderNotesOnCurrentPage(), 100)
+            return
+        }
+        
+        console.log('Отрисовываю заметки на текущих страницах...')
+        
+        // Для каждого загруженного контента
+        for (const content of contents) {
+            const { index, doc, overlayer } = content
+            if (!doc || !overlayer || this.#notesRendered.has(index)) {
+                continue
+            }
+            
+            console.log(`Проверяю страницу ${index} на наличие заметок`)
+            let renderedOnPage = 0
+            
+            // Ищем заметки которые относятся к этой странице
+            for (const [noteId, note] of this.#notes) {
+                if (note.cfi) {
+                    try {
+                        const resolved = this.resolveCFI(note.cfi)
+                        if (resolved && resolved.index === index) {
+                            const range = resolved.anchor(doc)
+                            if (range) {
+                                // Добавляем выделение
+                                overlayer.add(`note:${noteId}`, range, Overlayer.highlight, {
+                                    color: note.color || 'yellow',
+                                    opacity: 0.3
+                                })
+                                renderedOnPage++
+                                console.log(`✅ Заметка ${noteId} отрисована на странице ${index}`)
+                            }
+                        }
+                    } catch (e) {
+                        console.error(`Ошибка отрисовки заметки ${noteId}:`, e)
+                    }
+                }
+            }
+            
+            if (renderedOnPage > 0) {
+                this.#notesRendered.add(index)
+                console.log(`Отрисовано ${renderedOnPage} заметок на странице ${index}`)
+            }
+        }
+    }
 
     async renderExistingNotes() {
         if (!this.#notes || this.#notes.size === 0) {
@@ -553,6 +613,7 @@ export class View extends HTMLElement {
         if (reason === 'snap' || reason === 'page' || reason === 'scroll')
             this.history.replaceState(cfi)
         this.#emit('relocate', this.lastLocation)
+        setTimeout(() => this.renderNotesOnCurrentPage(), 100)
     }
     #onLoad({ doc, index }) {
         // set language and dir if not already set
@@ -563,7 +624,7 @@ export class View extends HTMLElement {
         this.#handleLinks(doc, index)
         this.#cursorAutohider.cloneFor(doc.documentElement)
 
-        this.renderNotesForCurrentPage(doc, index)
+        this.renderNotesOnCurrentPage()
 
         this.#emit('load', { doc, index })
     }
