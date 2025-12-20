@@ -48,3 +48,25 @@ def create_bookmark(book_id):
 def delete_bookmark(bookmark_id):
     BookmarkService.delete_bookmark(bookmark_id)
     return jsonify({"status": "ok"})
+
+
+@bookmark_bp.route("/bookmarks/<int:bookmark_id>", methods=["PUT"])
+def update_bookmark(bookmark_id):
+    data = request.json
+    
+    title = data.get("title")
+    
+    
+    if title is None:
+        return jsonify({"error": "No fields to update"}), 400
+    
+    updated_bookmark = BookmarkService.update_bookmark(bookmark_id, title)
+    
+    if not updated_bookmark:
+        return jsonify({"error": "Bookmark not found"}), 404
+    
+    return jsonify({
+        "id": updated_bookmark.id,
+        "title": updated_bookmark.title,
+        "position": updated_bookmark.position,
+    })

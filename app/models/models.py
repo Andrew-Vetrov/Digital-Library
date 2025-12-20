@@ -96,13 +96,15 @@ class Note(Base):
     position = Column(Float)
     cfi = Column(String(500), nullable=True)  # CFI для точного позиционирования
     selected_text = Column(Text, nullable=True)  # Выделенный текст
+    comment = Column(Text, nullable=True)
     note = relationship(
         "Book",
         back_populates = "noted_by"
     )
-    def __init__(self, book_id, title, position, selected_text, cfi):
+    def __init__(self, book_id, title, position, selected_text, cfi, comment):
         self.book_id = book_id
         self.title = title
         self.poistion = position
         self.selected_text = selected_text
         self.cfi = cfi
+        self.comment = comment

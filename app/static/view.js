@@ -572,6 +572,24 @@ export class View extends HTMLElement {
             })
         }
     }
+
+    updateNoteInCache(updatedNote) {
+        if (!this.#notes) return
+        
+        // Обновляем заметку в кэше
+        if (this.#notes.has(updatedNote.id)) {
+            this.#notes.set(updatedNote.id, updatedNote)
+            console.log(`Заметка ${updatedNote.id} обновлена в кэше`)
+        }
+        
+        // Обновляем выделение на странице
+        const contents = this.renderer?.getContents?.()
+        if (contents && contents.length > 0) {
+            // Перерисовываем заметки на текущих страницах
+            this.renderNotesOnCurrentPage()
+        }
+    }
+    
     close() {
         this.renderer?.destroy()
         this.renderer?.remove()

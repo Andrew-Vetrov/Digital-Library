@@ -68,7 +68,7 @@ class Reader {
     #saveTimeout = null
     #isSaving = false
     #minSaveInterval = 2000
-    
+    #notificationStack = []
     #tocView
     style = {
         spacing: 1.4,
@@ -90,19 +90,25 @@ class Reader {
         this.#bookId = this.#extractBookId()
         this.setupSidebarTabs();
         //this.addNoteControls();
+        
+         const bookmarkBtn = document.getElementById("add-bookmark-button")
+        bookmarkBtn.removeEventListener("click", this.handleBookmarkClick)
+        bookmarkBtn.addEventListener("click", this.handleBookmarkClick.bind(this))
+        document.getElementById("add-note-button")
+            .addEventListener("click", () => this.createNote())
+
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 this.saveCurrentPosition()
             }
         })
-        document.getElementById("add-bookmark-button")
-        .addEventListener("click", () => this.addBookmark());
-        document.getElementById("add-note-button")
-        .addEventListener("click", () => this.createNote());
         
         
     }
 
+    handleBookmarkClick() {
+        this.showBookmarkCreationPopup()
+    }
     setupSidebarTabs() {
         const tabButtons = document.querySelectorAll('.tab-btn');
         const tabContents = document.querySelectorAll('.tab-content');
@@ -128,6 +134,8 @@ class Reader {
             });
         });
     }
+
+    
     showNotePopup(note) {
         const popup = document.createElement('div')
         popup.style.cssText = `
@@ -136,42 +144,310 @@ class Reader {
             left: 50%;
             transform: translate(-50%, -50%);
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
             z-index: 10001;
-            min-width: 300px;
-            max-width: 500px;
+            min-width: 350px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-family: system-ui, sans-serif;
         `
         
+        // ДОБАВЛЯЕМ КОММЕНТАРИЙ В POPUP
+        const commentHTML = note.comment 
+            ? `<div style="
+                    margin-top: 15px;
+                    padding: 12px;
+                    background: #f8f9fa;
+                    border-radius: 6px;
+                    border-left: 4px solid #4CAF50;
+                ">
+                <div style="font-size: 14px; color: #666; margin-bottom: 5px;">
+                    <strong>Комментарий:</strong>
+                </div>
+                <div style="font-size: 15px; color: #333; line-height: 1.5;">
+                    ${note.comment}
+                </div>
+            </div>`
+            : '<div style="margin-top: 15px; color: #999; font-style: italic;">Нет комментария</div>'
+        
         popup.innerHTML = `
-            <h3 style="margin: 0 0 10px 0;">${note.title}</h3>
-            <div style="color: #666; font-size: 14px; margin-bottom: 15px;">
-                Романкин, Данил Романкин
-            </div>
-            <div style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 4px;">
-                <strong>Выделенный текст:</strong><br>
-                "${note.selected_text || ''}"
-            </div>
             <div style="margin-bottom: 20px;">
-                ${note.text || ''}
+                <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">${note.title || 'Заметка'}</h3>
+                <div style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                    ${note.created_at ? new Date(note.created_at).toLocaleDateString('ru-RU') : ''}
+                </div>
             </div>
-            <div style="display: flex; justify-content: flex-end;">
-                <button id="close-note-popup" style="
-                    padding: 8px 16px;
-                    background: #666;
-                    color: white;
-                    border: none;
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 6px;">
+                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                    <strong>Выделенный текст:</strong>
+                </div>
+                <div style="
+                    font-size: 15px;
+                    color: #333;
+                    line-height: 1.6;
+                    font-style: italic;
+                    border-left: 3px solid #FF9800;
+                    padding-left: 12px;
+                    background: white;
+                    padding: 12px;
                     border-radius: 4px;
-                    cursor: pointer;
-                ">Закрыть</button>
+                ">
+                    "${note.selected_text || note.text || ''}"
+                </div>
+            </div>
+            
+            ${commentHTML}
+            
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 25px;
+                padding-top: 15px;
+                border-top: 1px solid #eee;
+            ">
+                <div style="color: #666; font-size: 13px;">
+                    Позиция: ${Math.round((note.position || 0) * 100)}%
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="edit-note" style="
+                        padding: 8px 16px;
+                        background: #2196F3;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Редактировать</button>
+                    <button id="close-note-popup" style="
+                        padding: 8px 16px;
+                        background: #666;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Закрыть</button>
+                </div>
             </div>
         `
         
         document.body.appendChild(popup)
         
+        // КНОПКА РЕДАКТИРОВАНИЯ
+        popup.querySelector('#edit-note').addEventListener('click', () => {
+            this.editNote(note, popup)
+        })
+        
+        // КНОПКА ЗАКРЫТИЯ
         popup.querySelector('#close-note-popup').addEventListener('click', () => {
             document.body.removeChild(popup)
+        })
+        popup.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(popup)
+            }
+            // Останавливаем всплытие
+            e.stopPropagation()
+        })
+
+        // Для всех полей ввода внутри попапа:
+        popup.querySelectorAll('input, textarea, button').forEach(element => {
+            element.addEventListener('keydown', (e) => e.stopPropagation())
+        })
+        // Закрытие по клику вне попапа
+        setTimeout(() => {
+            const closeHandler = (e) => {
+                if (!popup.contains(e.target)) {
+                    document.body.removeChild(popup)
+                    document.removeEventListener('click', closeHandler)
+                }
+            }
+            document.addEventListener('click', closeHandler)
+        }, 100)
+    }
+
+    
+
+    async editNote(note, popup) {
+        const newTitle = prompt("Измените название заметки:", note.title || '')
+        if (newTitle === null) return // пользователь отменил
+        
+        const newComment = prompt("Измените комментарий:", note.comment || '')
+        if (newComment === null) return // пользователь отменил
+        
+        try {
+            const response = await fetch(`http://localhost:3000/notes/${note.id}`, {
+                method: "PUT",
+                headers: { 
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    title: newTitle,
+                    comment: newComment
+                })
+            })
+            
+            if (!response.ok) {
+                throw new Error('Ошибка при обновлении заметки')
+            }
+            
+            const updatedNote = await response.json()
+            
+            // Обновляем заметку в локальном хранилище
+            if (this.view) {
+                this.view.updateNoteInCache(updatedNote)
+            }
+            
+            // Обновляем UI
+            await this.loadNotes()
+            
+            // Закрываем старый попап и открываем новый с обновленными данными
+            if (popup && popup.parentNode) {
+                document.body.removeChild(popup)
+            }
+            
+            // Показываем обновленный попап
+            setTimeout(() => this.showNotePopup(updatedNote), 100)
+            
+            alert("✅ Заметка обновлена!")
+            
+        } catch (error) {
+            console.error("Ошибка редактирования заметки:", error)
+            alert(`Ошибка: ${error.message}`)
+        }
+    }
+
+    showBookmarkPopup(bookmark) {
+        const popup = document.createElement('div')
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 10001;
+            min-width: 350px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            font-family: system-ui, sans-serif;
+        `
+        
+        popup.innerHTML = `
+            <div style="margin-bottom: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">✏️ Редактировать закладку</h3>
+                <div style="color: #666; font-size: 13px; margin-bottom: 15px;">
+                    Позиция: ${Math.round((bookmark.position || 0) * 100)}%
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #555;">
+                    Название закладки:
+                </label>
+                <input type="text" id="bookmark-title-input" 
+                    value="${bookmark.title || 'Закладка'}"
+                    style="
+                        width: 100%;
+                        padding: 12px;
+                        border: 2px solid #ddd;
+                        border-radius: 6px;
+                        font-size: 15px;
+                        box-sizing: border-box;
+                        transition: border-color 0.3s;
+                    "
+                    placeholder="Введите название закладки"
+                >
+            </div>
+            
+            <div style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 25px;
+                padding-top: 15px;
+                border-top: 1px solid #eee;
+            ">
+                <div style="color: #666; font-size: 13px;">
+                    ${bookmark.created_at ? 'Создано: ' + new Date(bookmark.created_at).toLocaleDateString('ru-RU') : ''}
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="save-bookmark" style="
+                        padding: 8px 20px;
+                        background: #4CAF50;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                        font-weight: 500;
+                    ">Сохранить</button>
+                    <button id="close-bookmark-popup" style="
+                        padding: 8px 20px;
+                        background: #666;
+                        color: white;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">Отмена</button>
+                </div>
+            </div>
+        `
+        
+        document.body.appendChild(popup)
+        
+        // Фокус на поле ввода
+        setTimeout(() => {
+            const input = popup.querySelector('#bookmark-title-input')
+            input.focus()
+            input.select()
+        }, 100)
+        
+        // КНОПКА СОХРАНЕНИЯ
+        popup.querySelector('#save-bookmark').addEventListener('click', () => {
+            const newTitle = popup.querySelector('#bookmark-title-input').value.trim()
+            if (newTitle) {
+                this.editBookmark(bookmark.id, newTitle, popup)
+            } else {
+                alert('Название не может быть пустым')
+            }
+        })
+        
+        // Сохранение по Enter
+        popup.querySelector('#bookmark-title-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const newTitle = popup.querySelector('#bookmark-title-input').value.trim()
+                if (newTitle) {
+                    this.editBookmark(bookmark.id, newTitle, popup)
+                }
+            }
+        })
+        
+        // КНОПКА ЗАКРЫТИЯ
+        popup.querySelector('#close-bookmark-popup').addEventListener('click', () => {
+            document.body.removeChild(popup)
+        })
+
+        popup.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(popup)
+            }
+            // Останавливаем всплытие
+            e.stopPropagation()
+        })
+
+        // Для всех полей ввода внутри попапа:
+        popup.querySelectorAll('input, textarea, button').forEach(element => {
+            element.addEventListener('keydown', (e) => e.stopPropagation())
         })
         
         // Закрытие по клику вне попапа
@@ -184,6 +460,146 @@ class Reader {
             }
             document.addEventListener('click', closeHandler)
         }, 100)
+    }
+
+    async editBookmark(bookmarkId, newTitle, popup) {
+        try {
+            const response = await fetch(`http://localhost:3000/bookmarks/${bookmarkId}`, {
+                method: "PUT",
+                headers: { 
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    title: newTitle.trim()
+                })
+            })
+            
+            if (!response.ok) {
+                throw new Error('Ошибка при обновлении закладки')
+            }
+            
+            // Обновляем список закладок
+            await this.loadBookmarks()
+            
+            // Закрываем попап
+            if (popup && popup.parentNode) {
+                document.body.removeChild(popup)
+            }
+            
+            // Показываем уведомление вместо alert
+            this.showNotification('✅ Закладка обновлена!', 'success')
+            
+        } catch (error) {
+            console.error("Ошибка редактирования закладки:", error)
+            this.showNotification(`❌ Ошибка: ${error.message}`, 'error')
+        }
+    }
+
+
+    showNotification(message, type = 'info') {
+        const stack = new Error().stack
+        console.group('🔔 Notification called:')
+        console.log('Message:', message)
+        console.log('Type:', type)
+        console.log('Stack trace:', stack)
+        console.groupEnd()
+
+         
+        this.#notificationStack.push({
+            message,
+            type,
+            time: Date.now(),
+            stack: stack.split('\n').slice(2, 6).join('\n') // Берем первые 4 строки стека
+        })
+        
+        // Если за последние 500мс было такое же сообщение - пропускаем
+        // const lastNotification = this.#notificationStack
+        //     .slice(-5)
+        //     .find(n => n.message === message && Date.now() - n.time < 500)
+        
+        // if (lastNotification) {
+        //     console.log('🚫 Duplicate notification blocked:', message)
+        //     return
+        // }
+        // Добавляем CSS стили один раз при первом вызове
+        if (!window.diglibNotificationStylesAdded) {
+            const style = document.createElement('style')
+            style.textContent = `
+                @keyframes slideIn {
+                    from {
+                        transform: translateX(100%);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                
+                @keyframes fadeOut {
+                    from {
+                        opacity: 1;
+                    }
+                    to {
+                        opacity: 0;
+                    }
+                }
+                
+                .diglib-notification {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 12px 20px;
+                    color: white;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    z-index: 10002;
+                    font-size: 14px;
+                    animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s;
+                }
+            `
+            document.head.appendChild(style)
+            window.diglibNotificationStylesAdded = true
+        }
+        
+        const notification = document.createElement('div')
+        notification.className = 'diglib-notification'
+        
+        // Устанавливаем цвет в зависимости от типа
+        let bgColor
+        switch(type) {
+            case 'success':
+                bgColor = '#4CAF50'
+                break
+            case 'error':
+                bgColor = '#f44336'
+                break
+            case 'warning':
+                bgColor = '#ff9800'
+                break
+            default:
+                bgColor = '#2196F3'
+        }
+        
+        notification.style.backgroundColor = bgColor
+        notification.innerHTML = message
+        
+        document.body.appendChild(notification)
+        
+        // Автоматическое скрытие через 3 секунды
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.animation = 'fadeOut 0.3s ease'
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        document.body.removeChild(notification)
+                    }
+                }, 300)
+            }
+        }, 3000)
+        
+        // Возвращаем элемент для возможности ручного управления
+        return notification
     }
     addNoteControls() {
         const noteButton = document.createElement('button')
@@ -337,6 +753,171 @@ async addBookmark() {
     this.loadBookmarks()
 }
 
+showBookmarkCreationPopup() {
+    console.log('showBookmarkCreationPopup called', new Date().getTime())
+
+    if (!this.view?.lastLocation || !this.#bookId) {
+        this.showNotification('Книга не загружена', 'error')
+        return
+    }
+    
+    const popup = document.createElement('div')
+    popup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        z-index: 10001;
+        min-width: 350px;
+        max-width: 500px;
+        font-family: system-ui, sans-serif;
+    `
+    
+    popup.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">🔖 Создать закладку</h3>
+            <div style="color: #666; font-size: 13px;">
+                Текущая позиция: ${Math.round((this.view.lastLocation.fraction || 0) * 100)}%
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 25px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #555;">
+                Название закладки:
+            </label>
+            <input type="text" id="new-bookmark-title" 
+                value="Моя закладка"
+                style="
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 15px;
+                    box-sizing: border-box;
+                "
+                placeholder="Введите название закладки"
+            >
+        </div>
+        
+        <div style="
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        ">
+            <button id="create-bookmark" style="
+                padding: 10px 24px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+            ">Сохранить</button>
+            <button id="close-bookmark-creation-popup" style="
+                padding: 10px 24px;
+                background: #666;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            ">Отмена</button>
+        </div>
+    `
+    
+    document.body.appendChild(popup)
+    let isPopupClosed = false
+    const outsideClickHandler = (e) => {
+        if (!popup.contains(e.target)) {
+            closePopup()
+        }
+    }
+
+    const closePopup = () => {
+        if (isPopupClosed) return
+        isPopupClosed = true
+        
+        if (popup.parentNode) {
+            document.body.removeChild(popup)
+        }
+        
+        // Убираем обработчики
+        document.removeEventListener('click', outsideClickHandler)
+    }
+    // Фокус на поле ввода
+    setTimeout(() => {
+        const input = popup.querySelector('#new-bookmark-title')
+        input.focus()
+        input.select()
+    }, 100)
+    
+    let isSaving = false
+    // КНОПКА СОХРАНЕНИЯ
+    popup.querySelector('#create-bookmark').addEventListener('click', async () => {
+        // ЗАЩИТА ОТ ПОВТОРНЫХ НАЖАТИЙ
+        if (isSaving) {
+            console.log('⚠️ Already saving, ignoring click')
+            return
+        }
+        isSaving = true
+        
+        console.log('🎯 Bookmark save button clicked (first time)')
+        
+        const title = popup.querySelector('#new-bookmark-title').value.trim()
+        if (!title) {
+            this.showNotification('Введите название закладки!', 'error')
+            isSaving = false
+            return
+        }
+        
+        const pos = this.view.lastLocation.fraction
+        
+        try {
+            const response = await fetch(`http://localhost:3000/bookmarks/${this.#bookId}`, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    title, 
+                    position: pos 
+                })
+            })
+            
+            if (!response.ok) {
+                throw new Error('Ошибка при создании закладки')
+            }
+            
+            const result = await response.json()
+            console.log('📝 Bookmark created successfully:', result)
+            
+            // Закрываем попап ПЕРЕД уведомлением
+            closePopup()
+            
+            // ТОЛЬКО ОДИН ВЫЗОВ
+            console.log('📢 Calling notification...')
+            this.showNotification('✅ Закладка сохранена!', 'success')
+            
+            // Обновляем список
+            await this.loadBookmarks()
+            
+        } catch (error) {
+            console.error("❌ Bookmark creation error:", error)
+            this.showNotification(`❌ Ошибка: ${error.message}`, 'error')
+            isSaving = false // Сбрасываем флаг при ошибке
+        }
+    })
+}
+
+
 async loadBookmarks() {
     if (!this.#bookId) return
 
@@ -363,7 +944,8 @@ async loadBookmarks() {
             </div>
             <div class="bookmark-actions">
                 <button data-pos="${b.position}" data-id="${b.id}" class="jump">Перейти</button>
-                <button data-id="${b.id}" class="del">❌</button>
+                <button data-id="${b.id}" class="edit" title="Редактировать">✏️</button>
+                <button data-id="${b.id}" class="del" title="Удалить">❌</button>
             </div>
         `
         container.appendChild(item)
@@ -375,8 +957,18 @@ async loadBookmarks() {
             this.view.goToFraction(pos)
             this.closeSideBar()
         }
+        if (e.target.classList.contains("edit")) {
+            const bookmarkId = e.target.dataset.id
+            // Находим закладку в массиве
+            const bookmark = bookmarks.find(b => b.id == bookmarkId)
+            if (bookmark) {
+                this.showBookmarkPopup(bookmark)
+            }
+        }
         if (e.target.classList.contains("del")) {
+            
             this.deleteBookmark(e.target.dataset.id)
+            
         }
     })
 }
@@ -492,96 +1084,236 @@ async deleteBookmark(id) {
 
  async createNote() {
     if (!this.view?.lastLocation || !this.#bookId) return
-    // Получаем выделенный текст
+    
     const selectedText = this.getSelectedText()
-    console.log("Выделенный текст:", selectedText)
-    console.log(selectedText.length)
     if (!selectedText) {
-        alert("Выделите текст для заметки!")
+        this.showNotification('Выделите текст для заметки!', 'error')
         return
     }
     if (selectedText.length > 3000) {
+        this.showNotification('Текст слишком длинный (максимум 3000 символов)', 'error')
         return
     }
-    // Тот же трюк для позиционирования
-    /*this.view.goLeft()
-    this.view.style.opacity = '0'
-    this.view.style.pointerEvents = 'none'
-
-    this.view.goLeft()
-    await new Promise(r => setTimeout(r, 1000))*/
+    
     const pos = this.view.lastLocation.fraction
-    /*await new Promise(r => setTimeout(r, 30))
-    this.view.goRight()
-    await new Promise(r => setTimeout(r, 30))
-    const danil = this.view.lastLocation.fraction
-    console.log("pos = " + pos)
-    
-    this.view.style.opacity = '1'
-    this.view.style.pointerEvents = 'auto'*/
-
-    
-    
-    // Получаем CFI ВЫДЕЛЕНИЯ, а не страницы
     const selectionCFI = this.getSelectionCFI()
-    console.log("CFI выделения:", selectionCFI)
-    
-    // Используем CFI выделения если есть, иначе позицию страницы
     const cfi = selectionCFI || this.view.lastLocation.cfi
     
-    // Только название - текст заметки будет выделенный текст
-    const title = prompt("Название заметки:", selectedText.substring(0, 30))
-    if (!title) return
+    // Используем попап вместо prompt
+    this.showNoteCreationPopup({
+        title: selectedText.substring(0, 30),
+        selected_text: selectedText,
+        position: pos,
+        cfi: cfi
+    })
+}
+
+// Добавляем метод для попапа создания заметки
+showNoteCreationPopup(noteData) {
+    const popup = document.createElement('div')
+    popup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        z-index: 10001;
+        min-width: 400px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        font-family: system-ui, sans-serif;
+    `
     
-    // Текст заметки = выделенный текст
-    const noteText = selectedText
-    
-    console.log("Отправляю заметку...")
-    console.log("Title:", title)
-    console.log("Text (выделенный):", noteText)
-    console.log("CFI:", cfi)
-    console.log("Position:", pos)
-    
-    try {
-        const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ 
-                title, 
-                position: pos, 
-                text: noteText,
-                selected_text: selectedText,
-                cfi: cfi,
-                color: 'yellow' 
-            })
-        })
+    popup.innerHTML = `
+        <div style="margin-bottom: 20px;">
+            <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">📝 Создать заметку</h3>
+            <div style="color: #666; font-size: 13px;">
+                Позиция: ${Math.round((noteData.position || 0) * 100)}%
+            </div>
+        </div>
         
-        if (!response.ok) {
-            const errorText = await response.text()
-            console.error('Ошибка сервера:', response.status, errorText)
-            alert(`Ошибка сервера: ${response.status}`)
+        <div style="margin-bottom: 20px;">
+            <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #555;">
+                Название заметки:
+            </label>
+            <input type="text" id="note-title-input" 
+                value="${noteData.title || ''}"
+                style="
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 15px;
+                    box-sizing: border-box;
+                    margin-bottom: 20px;
+                "
+                placeholder="Введите название заметки"
+            >
+            
+            <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #555;">
+                Комментарий (необязательно):
+            </label>
+            <textarea id="note-comment-input" 
+                style="
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #ddd;
+                    border-radius: 6px;
+                    font-size: 15px;
+                    box-sizing: border-box;
+                    min-height: 80px;
+                    resize: vertical;
+                    font-family: inherit;
+                "
+                placeholder="Введите комментарий к заметке"
+            ></textarea>
+        </div>
+        
+        <div style="
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        ">
+            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                <strong>Выделенный текст:</strong>
+            </div>
+            <div style="
+                font-size: 14px;
+                color: #555;
+                line-height: 1.5;
+                max-height: 100px;
+                overflow-y: auto;
+                padding: 8px;
+                background: white;
+                border-radius: 4px;
+            ">
+                ${noteData.selected_text || ''}
+            </div>
+        </div>
+        
+        <div style="
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        ">
+            <button id="save-note" style="
+                padding: 10px 24px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+            ">Сохранить заметку</button>
+            <button id="close-note-popup" style="
+                padding: 10px 24px;
+                background: #666;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+            ">Отмена</button>
+        </div>
+    `
+    
+    document.body.appendChild(popup)
+    
+    // Фокус на поле названия
+    setTimeout(() => {
+        const input = popup.querySelector('#note-title-input')
+        input.focus()
+        input.select()
+    }, 100)
+    
+    // КНОПКА СОХРАНЕНИЯ
+    popup.querySelector('#save-note').addEventListener('click', async () => {
+        const title = popup.querySelector('#note-title-input').value.trim()
+        const comment = popup.querySelector('#note-comment-input').value.trim()
+        
+        if (!title) {
+            this.showNotification('Введите название заметки!', 'error')
             return
         }
         
-        const createdNote = await response.json()
-        console.log("Создана заметка:", createdNote)
-        
-        if (createdNote.id && this.view?.addNoteHighlight) {
-            console.log("Добавляю выделение...")
-            await this.view.addNoteHighlight(createdNote)
+        try {
+            const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`, {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                    title,
+                    position: noteData.position,
+                    text: noteData.selected_text,
+                    selected_text: noteData.selected_text,
+                    comment: comment,
+                    cfi: noteData.cfi,
+                    color: 'yellow' 
+                })
+            })
+            
+            if (!response.ok) {
+                throw new Error('Ошибка при создании заметки')
+            }
+            
+            const createdNote = await response.json()
+            
+            if (createdNote.id && this.view?.addNoteHighlight) {
+                await this.view.addNoteHighlight(createdNote)
+            }
+            
+            // Обновляем список
+            await this.loadNotes()
+            
+            // Закрываем попап
+            document.body.removeChild(popup)
+            
+            this.showNotification('✅ Заметка сохранена!', 'success')
+            
+        } catch (error) {
+            console.error("Ошибка создания заметки:", error)
+            this.showNotification(`❌ Ошибка: ${error.message}`, 'error')
         }
-        
-        // Обновляем список
-        await this.loadNotes()
-        
-        alert("✅ Заметка сохранена!")
-        
-    } catch (error) {
-        console.error("Ошибка создания заметки:", error)
-        alert(`Ошибка: ${error.message}`)
-    }
+    })
+    
+    // КНОПКА ЗАКРЫТИЯ
+    popup.querySelector('#close-note-popup').addEventListener('click', () => {
+        document.body.removeChild(popup)
+    })
+    
+    popup.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(popup)
+        }
+        // ОСТАНАВЛИВАЕМ ВСПЛЫТИЕ КЛАВИШ
+        e.stopPropagation()
+    })
+    
+    // ОСТАНАВЛИВАЕМ ВСПЛЫТИЕ ДЛЯ ВСЕХ ЭЛЕМЕНТОВ ВВОДА
+    const stopPropagation = (e) => e.stopPropagation()
+    popup.querySelector('#note-title-input').addEventListener('keydown', stopPropagation)
+    popup.querySelector('#note-comment-input').addEventListener('keydown', stopPropagation)
+    
+    // Закрытие по клику вне попапа
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!popup.contains(e.target)) {
+                document.body.removeChild(popup)
+                document.removeEventListener('click', closeHandler)
+            }
+        }
+        document.addEventListener('click', closeHandler)
+    }, 100)
 }
 
 getSelectedText() {

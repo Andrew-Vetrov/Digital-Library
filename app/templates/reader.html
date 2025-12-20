@@ -75,18 +75,46 @@ body {
 }
 
 .toolbar button {
-    padding: 8px 12px;
+    padding: 8px 16px;
     border-radius: 6px;
     background: none;
     border: 0;
-    color: GrayText;
+    color: CanvasText;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
 }
 
 .toolbar button:hover {
-    background: rgba(0, 0, 0, .1);
-    color: currentcolor;
+    background: var(--active-bg);
+    transform: translateY(-1px);
+}
+
+.toolbar button:active {
+    transform: translateY(0);
+}
+
+/* Кнопки с иконками (стрелки) сохраняют иконки */
+.toolbar .icon-btn {
+    padding: 8px 12px;
+}
+
+/* Кнопки с текстом */
+.toolbar .text-btn {
+    padding: 8px 16px;
+    min-width: 120px;
+    justify-content: center;
+}
+
+/* Иконки внутри кнопок с текстом */
+.toolbar .text-btn .icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
 }
 
 #header-bar {
@@ -551,6 +579,14 @@ body {
 .menu.show {
     visibility: visible;
 }
+.bookmark-actions .edit {
+    background: #2196F3 !important;
+    color: white !important;
+}
+
+.bookmark-actions .edit:hover {
+    background: #1976D2 !important;
+}
 .menu li {
     padding: 6px 12px;
     padding-left: 24px;
@@ -620,7 +656,7 @@ body {
 <div id="header-bar" class="toolbar">
     <!-- ЛЕВАЯ ЧАСТЬ -->
     <div class="toolbar-left">
-        <button id="side-bar-button" aria-label="Show sidebar" title="Боковая панель">
+        <button id="side-bar-button" aria-label="Show sidebar" title="Боковая панель" class="icon-btn">
             <svg class="icon" width="24" height="24" aria-hidden="true">
                 <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
             </svg>
@@ -632,24 +668,28 @@ body {
         <a href="http://localhost:3000/files" class="back-link-wrapper">
             <button class="back-btn" title="Вернуться в библиотеку">Назад</button>
         </a>
-        <button id="add-bookmark-button" title="Добавить закладку">🔖</button>
+        <button id="add-bookmark-button" class="text-btn" title="Добавить закладку">
+            🔖 Добавить закладку
+        </button>
     </div>
     
     <!-- ПРАВАЯ ЧАСТЬ -->
     <div class="toolbar-right">
-        <button id="add-note-button" title="Добавить заметку">📝</button>
+        <button id="add-note-button" class="text-btn" title="Создать заметку">
+            📝 Создать заметку
+        </button>
     </div>
 </div>
 
 <div id="nav-bar" class="toolbar">
-    <button id="left-button" aria-label="Go left">
+    <button id="left-button" aria-label="Go left" class="icon-btn">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 15 6 L 9 12 L 15 18"/>
         </svg>
     </button>
     <input id="progress-slider" type="range" min="0" max="1" step="any" list="tick-marks">
     <datalist id="tick-marks"></datalist>
-    <button id="right-button" aria-label="Go right">
+    <button id="right-button" aria-label="Go right" class="icon-btn">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 9 6 L 15 12 L 9 18"/>
         </svg>

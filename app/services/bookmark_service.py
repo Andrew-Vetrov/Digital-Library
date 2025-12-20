@@ -22,6 +22,20 @@ class BookmarkService:
             )
     
     @staticmethod
+    def update_bookmark(bookmark_id, title=None):
+        with get_connection() as session:
+            bookmark = session.query(Bookmark).filter_by(id=bookmark_id).first()
+            if not bookmark:
+                return None
+            
+            if title is not None:
+                bookmark.title = title
+                        
+            session.commit()
+            session.refresh(bookmark)
+            return bookmark
+        
+    @staticmethod
     def delete_bookmark(id):
         with get_connection() as session:
             session.query(Bookmark).filter_by(id=id).delete()

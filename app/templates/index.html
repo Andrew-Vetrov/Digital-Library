@@ -33,24 +33,25 @@
 </head>
 
 <body>
-    <header class="bg-dark">
-        <div class="container-fluid d-flex">
+    <header class="bg-dark py-2">
+        <div class="container-fluid d-flex align-items-center justify-content-between">
             {% if authorized == 0 %}
-            <div class="buttons ms-auto">
-                <a href="/authorization" class="btn btn-success">Вход</a>
-                <a href="/registration" class="btn btn-success">Регистрация</a>
+            <div class="d-flex align-items-center gap-2">
+                <a href="/authorization" class="btn btn-success btn-sm">Вход</a>
+                <a href="/registration" class="btn btn-success btn-sm">Регистрация</a>
             </div>
             {% else %}
-            <div class="buttons ms-auto">
-                <div class="badge bg-warning text-wrap" style="width: 6rem; height: 48px;font-size: 12px;">
+            <div class="d-flex align-items-center gap-2">
+                <div class="badge bg-warning text-wrap d-flex align-items-center justify-content-center" 
+                    style="height: 32px; font-size: 13px; min-width: 120px;">
                     Пользователь: {{username}}
                 </div>
-                <a href="/sign_out" class="btn btn-success">Выход</a>
-                <a href="/upload_file" class="btn btn-success">Загрузить файл</a>
+                <a href="/upload_file" class="btn btn-success btn-sm">Загрузить файл</a>
+                <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
             </div>
             {% endif %}
-            <a href="/files" class="btn btn-success">Посмотреть все файлы</a>
-
+            
+            <a href="/files" class="btn btn-primary btn-sm">Все файлы</a>
         </div>
     </header>
     {% if favorites %}
