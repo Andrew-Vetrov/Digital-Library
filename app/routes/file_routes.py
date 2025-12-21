@@ -6,7 +6,7 @@ from minio.error import S3Error
 from datetime import timedelta
 from models.models import Book
 from db import get_connection
-from services.elasticsearch_service import search_books
+from services.elasticsearch_service import search_books, semantic_search
 import sys
 import json
 from flask import after_this_request
@@ -36,6 +36,7 @@ policy = f'''
 }}
 '''
 
+
 def ensure_bucket_exists():
     try:
         if not minio_client.bucket_exists(BUCKET_NAME):
@@ -46,8 +47,10 @@ def ensure_bucket_exists():
     except Exception as e:
         print(f"Ошибка при создании бакета: {e}")
 
+
 ensure_bucket_exists()
 minio_client.set_bucket_policy(BUCKET_NAME, policy)
+
 
 @file_bp.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
@@ -79,6 +82,7 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     return response
 
+
 @file_bp.route("/delete/<int:book_id>", methods=["POST"])
 def delete_book(book_id):
     user_authorized = session.get("authorized", 0)
@@ -89,13 +93,19 @@ def delete_book(book_id):
     flash("Книга успешно удалена!", "success")
     return redirect(url_for("file.list_files"))
 
+
 @file_bp.route("/files", methods=["GET"])
 def list_files():
     PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "http://localhost:9000")
 
     query = request.args.get("q")
+    semantic = request.args.get("semantic") == "on"
+
     if query and query.strip():
-        es_results = search_books(query.strip())
+        if semantic:
+            es_results = semantic_search(query.strip())
+        else:
+            es_results = search_books(query.strip())
 
         book_ids = []
         for r in es_results:
@@ -135,6 +145,7 @@ def list_files():
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка: {e}")
 
+
 @file_bp.route("/reader/<int:id>", methods=["GET"])
 def read_book(id):
     try:
@@ -151,11 +162,11 @@ def read_book(id):
 
     except S3Error as e:
         return f"Ошибка при открытии книги: {e}"
-    
+
+
 @file_bp.route("/reading_progress/<int:book_id>", methods=["GET", "POST"])
 def reading_position(book_id):
     if request.method == 'GET':
-        """Получить сохраненную позицию (Loc)"""
         try:
             book = BookService.find_book_by_id(book_id)
             loc = book.last_position
@@ -168,26 +179,23 @@ def reading_position(book_id):
                 'error': str(e),
                 'loc': None
             }), 500
-    
+
     elif request.method == 'POST':
-        """Сохранить позицию (Loc)"""
         data = request.get_json()
-        
+
         if not data or 'loc' not in data:
             return jsonify({'error': 'Missing loc'}), 400
-        
+
         try:
-            loc = data['loc']  # Преобразуем в int
-            
-            # Сохраняем через BookService
+            loc = data['loc']
             BookService.set_reading_position(book_id, loc)
-            
+
             return jsonify({
                 'success': True,
                 'loc': loc,
                 'book_id': book_id
             })
-            
+
         except ValueError:
             return jsonify({'error': 'loc must be a number'}), 400
         except Exception as e:
