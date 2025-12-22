@@ -74,6 +74,25 @@
     {% endfor %}
 </div>
 {% endif %}
+
+    {% if recent_books %}
+<h3 class="mt-4">Недавние книги</h3>
+<div class="row">
+    {% for book in recent_books %}
+        <div class="col-md-3 mb-4">
+            <div class="card p-2 text-center book-card">
+                <img src="/cover/{{ book.id }}" class="book-cover" alt="">
+                <h6 class="mt-2">{{ book.title }}</h6>
+                <p class="text-muted" style="font-size: 12px;">{{ book.author }}</p>
+                
+                <a href="/reader/{{ book.id }}" class="btn btn-primary btn-sm">Читать</a>
+
+                <h6 class="mt-2">Прогресс: {{ (book.last_position*100)|round(2) }}%</h6>
+            </div>
+        </div>
+    {% endfor %}
+</div>
+{% endif %}
     <footer></footer>
 </body>
 

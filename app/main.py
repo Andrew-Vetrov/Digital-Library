@@ -5,6 +5,7 @@ from routes.favourite_routes import favourite_bp
 from routes.bookmark_routes import bookmark_bp
 from routes.note_routes import note_bp
 from services.favourites_service import FavoriteService
+from services.book_service import BookService
 from db import init_db
 from config import Config
 from services.elasticsearch_service import create_index
@@ -30,6 +31,7 @@ def index():
         d["authorized"] = 1
         d["username"] = session["authorized"]
         d["favorites"] = FavoriteService.get_favorites(session.get("user_id"))
+        d["recent_books"] = BookService.get_recent_books(session.get("user_id"))
 
     return render_template("index.html", **d)
 

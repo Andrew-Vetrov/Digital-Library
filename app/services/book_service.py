@@ -1,7 +1,8 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.models import Book
+from models.models import Book, ReadingHistory
+from datetime import datetime
 from db import get_connection
 from services.elasticsearch_service import index_book
 
@@ -128,4 +129,51 @@ class BookService:
                 {Book.last_position: new_position}, synchronize_session=False)
             session.commit()
             return True
+    
+    @staticmethod
+    def update_reading_history(user_id, book_id):
+        """Обновить историю чтения пользователя"""
+        with get_connection() as session:
+            # Находим существующую запись
+            history = session.query(ReadingHistory).filter(
+                ReadingHistory.user_id == user_id,
+                ReadingHistory.book_id == book_id
+            ).first()
             
+            # Рассчитываем прогресс, если известно общее количество символов
+            
+            
+            if history:
+                # Обновляем существующую запись
+                history.last_read_at = datetime.utcnow()
+                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                history.progress = progress
+            else:
+                # Создаем новую запись
+                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                history = ReadingHistory(
+                    user_id=user_id,
+                    book_id=book_id,
+                    progress=progress
+                )
+                session.add(history)
+            
+            session.commit()
+            return history
+    
+    @staticmethod
+    def get_recent_books(user_id, limit=5):
+        """Получить последние прочитанные книги пользователя"""
+        with get_connection() as session:
+            recent = session.query(ReadingHistory).join(Book).filter(
+                ReadingHistory.user_id == user_id
+            ).order_by(
+                ReadingHistory.last_read_at.desc()
+            ).limit(limit).all()
+            
+            books_with_progress = []
+            for history in recent:
+                book = history.book
+                books_with_progress.append(book)
+            
+            return books_with_progress

@@ -189,7 +189,7 @@ def reading_position(book_id):
         try:
             loc = data['loc']
             BookService.set_reading_position(book_id, loc)
-
+            BookService.update_reading_history(session.get("user_id"), book_id)
             return jsonify({
                 'success': True,
                 'loc': loc,
@@ -199,6 +199,7 @@ def reading_position(book_id):
         except ValueError:
             return jsonify({'error': 'loc must be a number'}), 400
         except Exception as e:
+            print(str(e))
             return jsonify({'error': str(e)}), 500
 
 
