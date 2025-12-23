@@ -39,15 +39,18 @@ def embed(text: str):
         vec = vec / norm
     return vec.tolist()
 
-def split_text(text: str, parts: int):
-    words = text.split()
-    if not words:
-        return []
-    size = math.ceil(len(words) / parts)
-    return [
-        " ".join(words[i:i + size])
-        for i in range(0, len(words), size)
-    ][:parts]
+def split_text(text: str, max_chars=8000):
+    chunks = []
+    start = 0
+
+    while start < len(text):
+        end = start + max_chars
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start = end
+
+    return chunks
+
 
 def create_index():
     if es.indices.exists(index=ES_INDEX):
@@ -128,7 +131,9 @@ def index_book(title: str, author: str, content: str, book_id=None):
         }
     )
 
-    chunks = split_text(content, MAX_CHUNKS)
+    # chunks = split_text(content, MAX_CHUNKS)
+    chunks = split_text(content)
+
     for chunk in chunks:
         es.index(
             index=ES_INDEX,
@@ -146,7 +151,7 @@ def index_book(title: str, author: str, content: str, book_id=None):
 
     return book_id
 
-def semantic_search(query: str, size=10, min_score=1.4):
+def semantic_search(query: str, size=10, min_score=1.5):
     query_vector = embed(query)
 
     body = {
