@@ -709,7 +709,15 @@ async #saveFraction(fraction) {
         //saved_at: new Date().toISOString()
     }
     if (fraction == 1.0) {
-        alert("Данил Ромашка вами доволен")
+        console.log("Ачивка")
+        const res = await fetch("http://localhost:3000/achievement/book_read", {
+        method: "POST",
+        })
+        const data = await res.json()
+
+        if (data.show_achievement) {
+            this.showNotification("🏆 Ачивка получена: Книга прочитана!", "success")
+        }
     }
     await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`, {
         method: 'POST',

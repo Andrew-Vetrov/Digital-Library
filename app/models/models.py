@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Float, Text, DateTime
+from sqlalchemy import Column, String, Integer, ForeignKey, Float, Text, DateTime, Boolean
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from db import Base
@@ -23,7 +23,7 @@ class User(Base):
     username = Column(String(64), nullable=False, unique=True)
     email = Column(String(64), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=False)
-
+    has_read_book_achievement = Column(Boolean, default=False)
     favorites = relationship(
         "Favourite",
         back_populates="user",
@@ -133,7 +133,7 @@ class ReadingHistory(Base):
     
     last_read_at = Column(DateTime, default=datetime.utcnow)
     progress = Column(Float, default=0)
-
+    
     user = relationship("User", back_populates="recent_books")
     book = relationship("Book", back_populates="reading_history")
     

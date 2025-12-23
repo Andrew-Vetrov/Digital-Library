@@ -42,3 +42,8 @@ class UserService:
             session.add(newUser)
             session.commit()
                 
+    @staticmethod
+    def has_read_book_achievement(user_id):
+        with get_connection() as session:
+            user = session.query(User).get(user_id)
+            return user.has_read_book_achievement if user else False
