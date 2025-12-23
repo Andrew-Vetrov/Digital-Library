@@ -6,7 +6,7 @@ from minio.error import S3Error
 from datetime import timedelta
 from models.models import Book
 from db import get_connection
-from services.elasticsearch_service import search_books, semantic_search
+from services.elasticsearch_service import search_books, semantic_search, add_search_history, get_search_history
 import sys
 import json
 from flask import after_this_request
@@ -101,6 +101,10 @@ def list_files():
     query = request.args.get("q")
     semantic = request.args.get("semantic") == "on"
 
+    user_id = session.get("user_id")
+    if user_id and query and query.strip():
+        add_search_history(user_id, query.strip())
+
     if query and query.strip():
         if semantic:
             es_results = semantic_search(query.strip())
@@ -144,6 +148,19 @@ def list_files():
 
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка: {e}")
+
+@file_bp.route("/search_history", methods=["GET"])
+def query_list():
+    user_id = session.get("user_id")
+    if not user_id:
+        abort(403, "Вы не авторизованы")
+
+    history = get_search_history(user_id)
+
+    return render_template(
+        "search_history.html",
+        history=history
+    )
 
 
 @file_bp.route("/reader/<int:id>", methods=["GET"])

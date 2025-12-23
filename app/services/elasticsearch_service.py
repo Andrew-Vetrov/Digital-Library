@@ -1,10 +1,11 @@
+from db import get_connection
+from models.models import User, SearchHistory
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import time
 import uuid
-import math
 
 ES_INDEX = "books"
 EMBEDDING_DIMS = 384
@@ -242,3 +243,41 @@ def search_books(query: str, size=20):
 
     except NotFoundError:
         return []
+
+def add_search_history(user_id: int, query: str):
+    with get_connection() as session:
+        user = session.get(User, user_id)
+        if not user:
+            return False
+
+        count = (
+            session.query(SearchHistory)
+            .filter(SearchHistory.user_id == user_id)
+            .count()
+        )
+
+        if count >= 20:
+            oldest = (
+                session.query(SearchHistory)
+                .filter(SearchHistory.user_id == user_id)
+                .order_by(SearchHistory.created_at.asc())
+                .first()
+            )
+            if oldest:
+                session.delete(oldest)
+
+        new_record = SearchHistory(user_id=user_id, query=query)
+        session.add(new_record)
+        session.commit()
+
+        return True
+
+def get_search_history(user_id: int):
+    with get_connection() as session:
+        history = (
+            session.query(SearchHistory)
+            .filter(SearchHistory.user_id == user_id)
+            .order_by(SearchHistory.created_at.desc())
+            .all()
+        )
+        return history

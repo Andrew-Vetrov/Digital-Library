@@ -36,6 +36,12 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
+    search_history = relationship(
+        "SearchHistory",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
     def __init__(self, username, email, password_hash):
         self.username = username
         self.email = email
@@ -146,3 +152,20 @@ class ReadingHistory(Base):
         self.book_id = book_id
         self.progress = progress
         self.last_read_at = datetime.utcnow()
+
+
+
+class SearchHistory(Base):
+    __tablename__ = "search_history"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    query = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="search_history")
+
+    def __init__(self, user_id, query):
+        self.user_id = user_id
+        self.query = query
+        self.created_at = datetime.utcnow()

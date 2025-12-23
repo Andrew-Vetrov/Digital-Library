@@ -7,8 +7,6 @@ from db import get_connection
 from services.elasticsearch_service import index_book
 
 class BookService:
-    _SENTINEL = object()
-
     @staticmethod
     def upload_book(file_storage, genre=None):
         temp_path = f"/tmp/{file_storage.filename}"

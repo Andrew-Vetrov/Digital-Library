@@ -37,78 +37,85 @@
 <div class="container">
   <h2 class="mb-4 text-center">📚 Моя библиотека</h2>
 
-<div class="container mt-4">
+  <div class="container mt-4">
 
     <form method="GET" action="/files" class="row g-3 p-3 mb-4 border rounded bg-light">
 
-        <div class="col-md-4">
-            <label class="form-label">Поиск по содержимому</label>
-            <input type="text" name="q" class="form-control" placeholder="Введите текст"
-                   value="{{ request.args.get('q', '') }}">
+      <div class="col-md-4">
+        <label class="form-label">Поиск по содержимому</label>
+        <input type="text" name="q" class="form-control"
+               placeholder="Введите текст"
+               value="{{ request.args.get('q', '') }}">
+      </div>
+
+      <div class="col-md-2 d-flex align-items-end">
+        <a href="/search_history" class="btn btn-primary w-100">
+          История поиска
+        </a>
+      </div>
+
+      <div class="col-md-12 mt-2 d-flex align-items-center gap-2">
+        <button class="btn btn-success">Найти</button>
+        <a href="/files" class="btn btn-secondary">Сбросить</a>
+
+        <div class="form-check ms-3">
+          <input class="form-check-input" type="checkbox" id="semantic" name="semantic"
+                 {{ 'checked' if request.args.get('semantic') else '' }}>
+          <label class="form-check-label" for="semantic">
+            Семантический поиск
+          </label>
         </div>
-
-        <div class="col-md-3 d-flex align-items-end">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="semantic" name="semantic"
-                    {{ 'checked' if request.args.get('semantic') else '' }}>
-                <label class="form-check-label" for="semantic">Семантический поиск</label>
-            </div>
-        </div>
-
-
-
-        <div class="col-md-12 mt-2">
-            <button class="btn btn-success">Найти</button>
-            <a href="/files" class="btn btn-secondary">Сбросить</a>
-        </div>
+      </div>
 
     </form>
-
 
     <form method="GET" action="/files" class="row g-3 p-3 border rounded bg-light">
 
-        <div class="col-md-3">
-            <label class="form-label">Автор</label>
-            <input type="text" name="author" class="form-control" value="{{ request.args.get('author', '') }}">
-        </div>
+      <div class="col-md-3">
+        <label class="form-label">Автор</label>
+        <input type="text" name="author" class="form-control"
+               value="{{ request.args.get('author', '') }}">
+      </div>
 
-        
-        <div class="col-md-12 mt-2">
-            <button class="btn btn-primary">Фильтровать</button>
-            <a href="/files" class="btn btn-secondary">Сбросить</a>
-        </div>
+      <div class="col-md-12 mt-2">
+        <button class="btn btn-primary">Фильтровать</button>
+        <a href="/files" class="btn btn-secondary">Сбросить</a>
+      </div>
+
     </form>
 
-</div>
+  </div>
 
   {% if books %}
   <div class="row mt-4">
     {% for book in books %}
-      <div class="col-md-4 mb-4">
-        <div class="card book-card p-2 text-center">
-          <img src="/cover/{{ book.id }}" class="book-cover" alt="Обложка">
-          <div class="card-body">
-            <h5 class="card-title mt-2">{{ book.title }}</h5>
-            <p class="text-muted mb-1">{{ book.author }}</p>
+    <div class="col-md-4 mb-4">
+      <div class="card book-card p-2 text-center">
+        <img src="/cover/{{ book.id }}" class="book-cover" alt="Обложка">
+        <div class="card-body">
+          <h5 class="card-title mt-2">{{ book.title }}</h5>
+          <p class="text-muted mb-1">{{ book.author }}</p>
 
-            {% if book.description %}
-            <p class="small text-secondary">{{ book.description[:100] }}{% if book.description|length > 100 %}...{% endif %}</p>
-            {% endif %}
+          {% if book.description %}
+          <p class="small text-secondary">
+            {{ book.description[:100] }}{% if book.description|length > 100 %}...{% endif %}
+          </p>
+          {% endif %}
 
-            <a href="/reader/{{ book.id }}" class="btn btn-primary">Читать</a>
+          <a href="/reader/{{ book.id }}" class="btn btn-primary">Читать</a>
 
-            {% if session.authorized %}
-              <form action="/favorite/{{ book.id }}" method="POST" style="display:inline;">
-                <button class="btn btn-warning">В избранное ⭐</button>
-              </form>
+          {% if session.authorized %}
+          <form action="/favorite/{{ book.id }}" method="POST" style="display:inline;">
+            <button class="btn btn-warning">В избранное ⭐</button>
+          </form>
 
-              <form action="/delete/{{ book.id }}" method="POST" style="display:inline;">
-                <button type="submit" class="btn btn-danger">Удалить</button>
-              </form>
-            {% endif %}
-          </div>
+          <form action="/delete/{{ book.id }}" method="POST" style="display:inline;">
+            <button type="submit" class="btn btn-danger">Удалить</button>
+          </form>
+          {% endif %}
         </div>
       </div>
+    </div>
     {% endfor %}
   </div>
   {% else %}
