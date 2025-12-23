@@ -685,14 +685,14 @@ class Reader {
     
     
     #onRelocate({ detail }) {
-    const { fraction } = detail  // ← ТОЛЬКО ЭТО берем!
+    const { fraction , cfi} = detail  // ← ТОЛЬКО ЭТО берем!
     
     // Сохраняем ТОЛЬКО fraction
     if (this.#bookId) {
         if (this.#saveTimeout) clearTimeout(this.#saveTimeout)
         
         this.#saveTimeout = setTimeout(() => {
-            this.#saveFraction(fraction)  // ← вызываем с fraction
+            this.#saveFraction(fraction, cfi)  // ← вызываем с fraction
         }, 1000)
     }
 
@@ -703,9 +703,10 @@ class Reader {
     slider.value = fraction
     slider.title = `${percent}`
 }
-async #saveFraction(fraction) {
+async #saveFraction(fraction, cfi) {
     const data = {
-        loc: fraction,  // ← ТОЛЬКО ЭТО отправляем!
+        loc: fraction, 
+        cfi: cfi // ← ТОЛЬКО ЭТО отправляем!
         //saved_at: new Date().toISOString()
     }
     if (fraction == 1.0) {
@@ -762,7 +763,6 @@ async addBookmark() {
 }
 
 showBookmarkCreationPopup() {
-    console.log('showBookmarkCreationPopup called', new Date().getTime())
 
     if (!this.view?.lastLocation || !this.#bookId) {
         this.showNotification('Книга не загружена', 'error')
@@ -866,6 +866,25 @@ showBookmarkCreationPopup() {
         input.focus()
         input.select()
     }, 100)
+     popup.querySelector('#close-bookmark-creation-popup').addEventListener('click', () => {
+        console.log('❌ Close button clicked')
+        closePopup()
+    })
+    
+    // Сохранение по Enter
+    popup.querySelector('#new-bookmark-title').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            popup.querySelector('#create-bookmark').click()
+        }
+    })
+    
+    // Закрытие по Escape
+    popup.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closePopup()
+        }
+        e.stopPropagation()
+    })
     
     let isSaving = false
     // КНОПКА СОХРАНЕНИЯ
@@ -887,6 +906,7 @@ showBookmarkCreationPopup() {
         }
         
         const pos = this.view.lastLocation.fraction
+        const cur_cfi = this.view.lastLocation.cfi
         
         try {
             const response = await fetch(`http://localhost:3000/bookmarks/${this.#bookId}`, {
@@ -896,7 +916,8 @@ showBookmarkCreationPopup() {
                 },
                 body: JSON.stringify({ 
                     title, 
-                    position: pos 
+                    position: pos,
+                    cfi: cur_cfi 
                 })
             })
             
@@ -934,7 +955,12 @@ async loadBookmarks() {
 
     const container = document.getElementById("bookmark-list")
     if (!container) return
-    
+    console.log('📖 Загружены закладки:', bookmarks.map(b => ({
+        id: b.id,
+        title: b.title,
+        cfi: b.cfi,
+        position: b.position
+    })))
     container.innerHTML = ""
 
     if (bookmarks.length === 0) {
@@ -951,7 +977,7 @@ async loadBookmarks() {
                 <span class="bookmark-position">${Math.round(b.position * 100)}%</span>
             </div>
             <div class="bookmark-actions">
-                <button data-pos="${b.position}" data-id="${b.id}" class="jump">Перейти</button>
+                <button data-pos="${b.position}" data-cfi="${b.cfi}" data-id="${b.id}" class="jump">Перейти</button>
                 <button data-id="${b.id}" class="edit" title="Редактировать">✏️</button>
                 <button data-id="${b.id}" class="del" title="Удалить">❌</button>
             </div>
@@ -962,7 +988,15 @@ async loadBookmarks() {
     container.addEventListener("click", e => {
         if (e.target.classList.contains("jump")) {
             const pos = parseFloat(e.target.dataset.pos)
-            this.view.goToFraction(pos)
+            
+            const cfi = e.target.dataset.cfi
+            console.log(cfi)
+            if (cfi) {
+                console.log("CFI PARSED")
+                this.view.goTo(cfi)
+            } else if (pos) {
+                this.view.goToFraction(pos)
+            }
             this.closeSideBar()
         }
         if (e.target.classList.contains("edit")) {
@@ -1466,6 +1500,7 @@ async loadNotes() {
             const cfi = e.target.dataset.cfi
             
             if (cfi) {
+                console.log("CFI PARSED")
                 this.view.goTo(cfi)
             } else if (pos) {
                 this.view.goToFraction(pos)
@@ -1525,6 +1560,7 @@ async deleteNote(id) {
 
     async open(file) {
         let savedLoc = null
+        let savedCFI = null
         await this.loadBookmarks()
         await this.loadNotes()
         
@@ -1533,8 +1569,10 @@ async deleteNote(id) {
                 const response = await fetch(`http://localhost:3000/reading_progress/${this.#bookId}`)
                 if (response.ok) {
                     const data = await response.json()
+                    console.log("DATA", data)
                     if (data.loc !== null && data.loc !== undefined) {
                         savedLoc = data.loc
+                        savedCFI = data.cfi
                         console.log(`Loaded saved Loc: ${savedLoc}`)
                     }
                 }
@@ -1658,39 +1696,40 @@ async deleteNote(id) {
             })
         }
 
-         if (savedLoc !== null) {
+         if (savedLoc !== null && savedCFI !==null) {
             // Ждем немного пока книга загрузится
             setTimeout(() => {
-                this.#restorePosition(savedLoc)
+                this.#restorePosition(savedLoc, savedCFI)
             }, 1000)
         } else {
             this.view.renderer.next()
         }
     }
 
-    async #restorePosition(fraction) {
+    async #restorePosition(fraction, cfi) {
         // 1. Скрываем
     this.view.style.opacity = '0'
     
     // 2. Ждем загрузки
-    await new Promise(r => setTimeout(r, 500))
+    // await new Promise(r => setTimeout(r, 500))
     
-    // 3. Переходим
-    await this.view.goToFraction(fraction)
+    // // 3. Переходим
+    // await this.view.goToFraction(fraction)
     
-    // 4. Форсируем рендер
-    //this.view.renderer?.previous?.() // туда-сюда
+    // // 4. Форсируем рендер
+    // //this.view.renderer?.previous?.() // туда-сюда
 
-    // 5. Ждем
-    await new Promise(r => setTimeout(r, 300))
+    // // 5. Ждем
+    // await new Promise(r => setTimeout(r, 300))
     
     // 6. Показываем
     this.view.style.opacity = '1'
-    if (fraction != 1.0){this.view.goLeft()}
+    this.view.goTo(cfi)
+    //if (fraction != 1.0){this.view.goLeft()}
     
     // 7. Еще раз уточняем (иногда помогает)
 
-    setTimeout(() => {this.view.goToFraction(fraction)},100)
+    //setTimeout(() => {this.view.goToFraction(fraction)},100)
     // setTimeout(() => {
     //     this.view.goToFraction(fraction + 0.001).then(() => {
     //         this.view.goToFraction(fraction - 0.001)

@@ -53,6 +53,7 @@ class Book(Base):
     minio_key = Column(String(255), nullable=False)
     cover_key = Column(String(255))
     last_position = Column(Float)
+    cfi = Column(String(500), nullable=True)
     # список Favourite объектов
     favorited_by = relationship(
         "Favourite",
@@ -85,6 +86,7 @@ class Book(Base):
         self.minio_key = minio_key
         self.cover_key = cover_key
         self.last_position = 0
+        self.cfi = ""
 
 class Bookmark(Base):
     __tablename__ = "bookmarks"
@@ -92,14 +94,16 @@ class Bookmark(Base):
     title = Column(String(255), nullable=False)
     book_id = Column(Integer, ForeignKey("books.id"), nullable=False)
     position = Column(Float)
+    cfi = Column(String(500), nullable=True)
     book = relationship(
         "Book",
         back_populates = "bookmarked_by"
     )
-    def __init__(self, book_id, title, position):
+    def __init__(self, book_id, title, position, cfi):
         self.book_id = book_id
         self.title = title
         self.position = position
+        self.cfi = cfi
 
 class Note(Base):
     __tablename__ = "notes"
