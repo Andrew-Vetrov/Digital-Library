@@ -4,9 +4,9 @@ from models.models import User, Book, Favourite, Bookmark
 
 class BookmarkService:
     @staticmethod
-    def create_bookmark(book_id, title, position):
+    def create_bookmark(book_id, title, position, cfi):
         with get_connection() as session:
-            bm = Bookmark(book_id=book_id, title=title, position=position)
+            bm = Bookmark(book_id=book_id, title=title, position=position, cfi=cfi)
             bm.position=position
             session.add(bm)
             session.commit()

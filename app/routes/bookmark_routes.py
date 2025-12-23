@@ -20,7 +20,8 @@ def get_bookmarks(book_id):
         {
             "id": b.id,
             "title": b.title,
-            "position": b.position
+            "position": b.position,
+            "cfi": b.cfi
         }
         for b in bookmarks
     ])
@@ -33,15 +34,17 @@ def create_bookmark(book_id):
     #book_id = data.get("book_id")
     title = data.get("title")
     position = data.get("position")
+    cfi = data.get("cfi")
     print("\n\n\n",position,"\n\n\n",flush=True)
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
-    bm = BookmarkService.create_bookmark(book_id, title, position)
+    bm = BookmarkService.create_bookmark(book_id, title, position, cfi)
     print("Создал закладку",flush=True)
     return jsonify({
         "id": "",
         "title": "",
-        "position": ""
+        "position": "",
+        "cfi": ""
     }), 201
 
 @bookmark_bp.route("/bookmarks/<int:bookmark_id>", methods=["DELETE"])

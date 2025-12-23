@@ -122,11 +122,11 @@ class BookService:
         return res.last_position
     
     @staticmethod
-    def set_reading_position(book_id, new_position):
+    def set_reading_position(book_id, new_position, cfi):
         with get_connection() as session:
             q = session.query(Book).filter(Book.id == book_id).first()
             session.query(Book).filter(Book.id == book_id).update(
-                {Book.last_position: new_position}, synchronize_session=False)
+                {Book.last_position: new_position, Book.cfi: cfi}, synchronize_session=False)
             session.commit()
             return True
     

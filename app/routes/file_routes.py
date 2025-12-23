@@ -170,8 +170,10 @@ def reading_position(book_id):
         try:
             book = BookService.find_book_by_id(book_id)
             loc = book.last_position
+            cfi = book.cfi
             return jsonify({
-                'loc': loc
+                'loc': loc,
+                'cfi': cfi
             })
         except Exception as e:
             print(e)
@@ -188,12 +190,14 @@ def reading_position(book_id):
 
         try:
             loc = data['loc']
-            BookService.set_reading_position(book_id, loc)
+            cfi = data['cfi']
+            BookService.set_reading_position(book_id, loc, cfi)
             BookService.update_reading_history(session.get("user_id"), book_id)
             return jsonify({
                 'success': True,
                 'loc': loc,
-                'book_id': book_id
+                'book_id': book_id,
+                "cfi": cfi
             })
 
         except ValueError:
