@@ -17,27 +17,40 @@
     <header class="bg-dark">
         <div class="container-fluid d-flex">
                 <a href="/" class="btn btn-primary" >На главную</a>
-            
         </div>
     </header>
 
-    <form action="/upload_file" method="POST" enctype="multipart/form-data" id="uploadForm">
-  <div>
-    <input type="file" id="file" name="file" multiple onchange="submitForm()" />
-  </div>
+    <div class="container mt-4">
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+            <!-- Форма загрузки файла -->
+            <form action="/upload_file" method="POST" enctype="multipart/form-data" id="uploadForm" class="mb-0">
+                <div class="mb-0">
+                    <label for="file" class="btn btn-warning">
+                        <i class="bi bi-cloud-upload"></i> Загрузить файлы
+                    </label>
+                    <input type="file" class="form-control d-none" id="file" name="file" 
+                           multiple onchange="submitForm()">
+                </div>
+            </form>
 
-</form>
+            <!-- Кнопка "Посмотреть все файлы" -->
+            <a href="/files" class="btn btn-success">
+                <i class="bi bi-folder"></i> Посмотреть все файлы
+            </a>
+        </div>
 
-{% if message %}
-        <p style="color: green;">{{ message }}</p>
-{% endif %}
-<script>
-function submitForm() {
-    document.getElementById('uploadForm').submit();
-}
-</script>
+        {% if message %}
+            <div class="alert alert-success mt-3" role="alert">
+                {{ message }}
+            </div>
+        {% endif %}
+    </div>
 
- <a href="/files" class="btn btn-success">Посмотреть все файлы</a>
+    <script>
+    function submitForm() {
+        document.getElementById('uploadForm').submit();
+    }
+    </script>
 
 </body>
 
