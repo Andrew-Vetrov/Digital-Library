@@ -47,3 +47,9 @@ class UserService:
         with get_connection() as session:
             user = session.query(User).get(user_id)
             return user.has_read_book_achievement if user else False
+        
+    @staticmethod
+    def get_user_by_id(user_id):
+        with get_connection() as session:
+            user = session.query(User).get(user_id)
+            return user

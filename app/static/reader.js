@@ -2,6 +2,7 @@ import './view.js'
 import { createTOCView } from './tree.js'
 import { createMenu } from './menu.js'
 import { Overlayer } from './overlayer.js'
+import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
 
 const getCSS = ({ spacing, justify, hyphenate }) => `
     @namespace epub "http://www.idpf.org/2007/ops";
@@ -102,6 +103,15 @@ class Reader {
                 this.saveCurrentPosition()
             }
         })
+        document.getElementById('presence-trigger').addEventListener('click', function(e) {
+        document.getElementById('presence-list').classList.toggle('show');
+        e.stopPropagation();
+    });
+
+    // Закрывать при клике вне кнопки
+    window.addEventListener('click', () => {
+        document.getElementById('presence-list').classList.remove('show');
+    });
         
         
     }
@@ -1704,8 +1714,157 @@ async deleteNote(id) {
         } else {
             this.view.renderer.next()
         }
+
+        this.bookId = file.name; // Используем имя файла или ID из БД как ключ комнаты
+        this.initPresence();
     }
 
+    initPresence() {
+        this.socket = io("http://localhost:3000");
+
+        this.socket.on('connect', () => {
+            const initialLoc = this.view.lastLocation;
+            this.socket.emit('join_book', {
+                book_id: this.bookId,
+                cfi: initialLoc?.cfi,
+                fraction: initialLoc?.fraction || 0
+            });
+        });
+
+        // Получаем обновления от других пользователей
+        this.socket.on('presence_update', (users) => {
+            const listContainer = document.getElementById('presence-list');
+    const countBadge = document.getElementById('presence-count');
+    const markersContainer = document.getElementById('presence-markers-container');
+
+    if (!listContainer || !markersContainer) return;
+
+    const entries = Object.entries(users);
+
+    // 2. Обновляем счетчик на кнопке
+    if (countBadge) countBadge.innerText = entries.length;
+
+    // 3. Очищаем всё перед перерисовкой
+    listContainer.innerHTML = '';
+    markersContainer.innerHTML = '';
+
+    entries.forEach(([sid, data]) => {
+        const username = data.username || "Аноним";
+        const fraction = data.fraction || 0;
+        const percent = Math.round(fraction * 100);
+
+        // --- Наполняем выпадающий список (текст) ---
+        const item = document.createElement('div');
+        item.className = 'user-item';
+        item.innerHTML = `
+            <span class="name">${username}</span>
+            <span class="percent">${percent}%</span>
+        `;
+        listContainer.appendChild(item);
+
+        // --- Рисуем точку на прогресс-баре ---
+        // Рисуем только для ДРУГИХ юзеров (чтобы своя точка не бесила)
+        if (sid !== this.socket.id) {
+            const marker = document.createElement('div');
+            marker.className = 'presence-marker';
+            marker.dataset.username = username;
+            
+            // Ставим точку на полосе (fraction — это число от 0 до 1)
+            marker.style.left = `${fraction * 100}%`;
+            
+            markersContainer.appendChild(marker);
+        }
+    });
+        });
+
+        // Отправляем свою позицию при перелистывании
+        this.view.addEventListener('relocate', ({ detail }) => {
+            if (this.socket && this.socket.connected) {
+                this.socket.emit('update_position', {
+                    book_id: this.bookId,
+                    cfi: detail.cfi,
+                    fraction: detail.fraction
+                });
+            }
+        });
+    }
+
+    renderPresence(users) {
+        const others = Object.entries(users).filter(([id]) => id !== this.socket.id);
+        this.updatePresenceDropdown(others);
+        this.updateProgressBarDots(others);
+    }
+
+    updatePresenceDropdown(users) {
+        let container = document.getElementById('presence-dropdown');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'presence-dropdown';
+            container.innerHTML = `
+                <button class="presence-btn">Читают сейчас: <span id="presence-count">0</span></button>
+                <ul class="presence-list" style="display:none; position:absolute; top:40px; background:white; border:1px solid #ccc; list-style:none; padding:10px;"></ul>
+            `;
+            document.body.appendChild(container); // Или в ваш хедер
+            container.querySelector('.presence-btn').onclick = () => {
+                const list = container.querySelector('.presence-list');
+                list.style.display = list.style.display === 'none' ? 'block' : 'none';
+            };
+        }
+
+        const list = container.querySelector('.presence-list');
+        const count = container.querySelector('#presence-count');
+        count.innerText = users.length;
+        
+        list.innerHTML = users.map(([id, user]) => `
+            <li style="cursor:pointer; padding:5px;" data-cfi="${user.cfi}">
+                👤 ${user.username} (на ${Math.round(user.fraction * 100)}%)
+            </li>
+        `).join('');
+
+        // Навигация к пользователю при клике
+        list.querySelectorAll('li').forEach(li => {
+            li.onclick = () => {
+                const cfi = li.getAttribute('data-cfi');
+                if (cfi) this.view.goTo(cfi); // Используем встроенный метод навигации
+            };
+        });
+    }
+
+
+    updateProgressBarDots(users) {
+        const progressBar = document.getElementById('progress-slider');
+        if (!progressBar) return;
+
+        let dotsContainer = document.getElementById('presence-dots');
+        if (!dotsContainer) {
+            dotsContainer = document.createElement('div');
+            dotsContainer.id = 'presence-dots';
+            // Стилизуем контейнер точно поверх прогресс-бара
+            Object.assign(dotsContainer.style, {
+                position: 'absolute',
+                left: progressBar.offsetLeft + 'px',
+                top: progressBar.offsetTop + 'px',
+                width: progressBar.offsetWidth + 'px',
+                height: progressBar.offsetHeight + 'px',
+                pointerEvents: 'none'
+            });
+            progressBar.parentNode.appendChild(dotsContainer);
+        }
+
+        dotsContainer.innerHTML = users.map(([id, user]) => `
+            <div class="user-dot" title="${user.name}" style="
+                position: absolute;
+                left: ${user.fraction * 100}%;
+                top: 50%;
+                transform: translate(-50%, -50%);
+                width: 8px;
+                height: 8px;
+                background: #ff4757;
+                border-radius: 50%;
+                border: 1px solid white;
+            "></div>
+        `).join('');
+    }
     async #restorePosition(fraction, cfi) {
         // 1. Скрываем
     this.view.style.opacity = '0'

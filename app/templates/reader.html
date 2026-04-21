@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="
     default-src 'self' blob:;
-    script-src 'self';
+    script-src 'self' https://cdn.socket.io;
     style-src 'self' blob: 'unsafe-inline';
     img-src 'self' blob: data:;
     connect-src 'self' blob: data: * http://localhost:* https://localhost:* http://127.0.0.1:* https://127.0.0.1:* ws://localhost:* wss://localhost:*;
@@ -614,6 +614,135 @@ body {
     fill: Canvas;
     filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .2));
 }
+
+#presence-bar {
+    display: flex;
+    justify-content: flex-end; /* Сдвигаем вправо */
+    padding: 5px 15px;
+    background: transparent;
+}
+
+.presence-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.presence-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #ddd;
+    padding: 5px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.presence-btn:hover {
+    background: #f0f0f0;
+}
+
+.count-badge {
+    background: #007bff;
+    color: white;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+}
+
+/* Выпадающий список */
+.dropdown-content {
+    display: none; /* Скрыт по умолчанию */
+    position: absolute;
+    right: 0;
+    top: 100%;
+    margin-top: 8px;
+    background-color: #fff;
+    min-width: 180px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.1);
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    z-index: 1000;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Показываем при клике (через JS) */
+.dropdown-content.show {
+    display: block;
+}
+
+.user-item {
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+}
+
+.user-item .name { font-weight: 500; }
+.user-item .percent { color: #007bff; font-weight: bold; }
+
+/* Пульсация (оставляем старую) */
+.pulse-icon {
+    width: 8px;
+    height: 8px;
+    background-color: #2ecc71;
+    border-radius: 50%;
+    box-shadow: 0 0 0 rgba(46, 204, 113, 0.4);
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+    70% { box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+}
+
+.progress-container-relative {
+    position: relative;
+    width: 100%;
+    height: 12px; /* или какая у тебя высота */
+}
+
+.presence-marker {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    background-color: #2ecc71; /* Зеленый цвет */
+    border: 2px solid #fff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    pointer-events: auto; /* Чтобы работало наведение с именем */
+    cursor: pointer;
+}
+
+.presence-marker::after {
+    content: attr(data-username);
+    position: absolute;
+    bottom: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    display: none;
+    white-space: nowrap;
+}
+
+.presence-marker:hover::after {
+    display: block;
+}
 </style>
 
 <div id="dimming-overlay" aria-hidden="true"></div>
@@ -671,6 +800,16 @@ body {
         <button id="add-bookmark-button" class="text-btn" title="Добавить закладку">
             🔖 Добавить закладку
         </button>
+
+        <div class="presence-dropdown">
+            <button id="presence-trigger" class="text-btn presence-btn" title="Посмотреть кто читает">
+                <span class="pulse-icon"></span>
+                <span class="presence-label">Сейчас читают</span>
+                <span id="presence-count" class="count-badge">0</span>
+            </button>
+            <div id="presence-list" class="dropdown-content">
+                </div>
+        </div>
     </div>
     
     <!-- ПРАВАЯ ЧАСТЬ -->
@@ -681,14 +820,21 @@ body {
     </div>
 </div>
 
+
 <div id="nav-bar" class="toolbar">
     <button id="left-button" aria-label="Go left" class="icon-btn">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 15 6 L 9 12 L 15 18"/>
         </svg>
     </button>
-    <input id="progress-slider" type="range" min="0" max="1" step="any" list="tick-marks">
+    
+    <div class="progress-wrapper" style="position: relative; flex-grow: 1; display: flex; align-items: center;">
+        <input id="progress-slider" type="range" min="0" max="1" step="any" list="tick-marks" style="width: 100%; margin: 0;">
+        <div id="presence-markers-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
+    </div>
+
     <datalist id="tick-marks"></datalist>
+    
     <button id="right-button" aria-label="Go right" class="icon-btn">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 9 6 L 15 12 L 9 18"/>

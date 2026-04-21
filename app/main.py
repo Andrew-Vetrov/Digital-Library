@@ -11,9 +11,12 @@ from services.user_service import UserService
 from db import init_db
 from config import Config
 from services.elasticsearch_service import create_index
+from services.presence_events import init_presence_events
+from flask_socketio import SocketIO
 
 app = Flask(__name__)
 app.secret_key = Config().SECRET_KEY
+
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(file_bp)
@@ -21,6 +24,9 @@ app.register_blueprint(favourite_bp)
 app.register_blueprint(bookmark_bp)
 app.register_blueprint(note_bp)
 app.register_blueprint(achievement_bp)
+
+socketio = SocketIO(app)
+init_presence_events(socketio)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -45,4 +51,4 @@ def index():
 if __name__ == "__main__":
     init_db()
     create_index()
-    app.run(host="0.0.0.0", port=3000, debug=True)
+    socketio.run(app, host="0.0.0.0", debug=True,  port=3000, allow_unsafe_werkzeug=True)
