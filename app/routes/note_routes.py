@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from services.note_service import NoteService
 
 note_bp = Blueprint("note_bp", __name__)
@@ -14,7 +14,7 @@ def add_cors_headers(response):
 
 @note_bp.route("/notes/<int:book_id>", methods=["GET"])
 def get_notes(book_id):
-    notes = NoteService.get_notes(book_id)
+    notes = NoteService.get_notes(book_id, session["user_id"])
 
     return jsonify([
         {
@@ -42,7 +42,7 @@ def create_note(book_id):
     print("\n\n\n",position,"\n\n\n",flush=True)
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
-    bm = NoteService.create_note(book_id, title, position, selected_text, cfi, comment)
+    bm = NoteService.create_note(book_id, title, position, selected_text, cfi, comment, session["user_id"])
     print("Создал заметку",flush=True)
     return jsonify({
         "id": bm.id,

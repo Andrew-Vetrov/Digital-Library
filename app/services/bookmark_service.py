@@ -4,19 +4,20 @@ from models.models import User, Book, Favourite, Bookmark
 
 class BookmarkService:
     @staticmethod
-    def create_bookmark(book_id, title, position, cfi):
+    def create_bookmark(book_id, title, position, cfi, user_id):
         with get_connection() as session:
-            bm = Bookmark(book_id=book_id, title=title, position=position, cfi=cfi)
+            bm = Bookmark(book_id=book_id, title=title, position=position, cfi=cfi, user_id=user_id)
             bm.position=position
             session.add(bm)
             session.commit()
             return
     @staticmethod
-    def get_bookmarks(book_id):
+    def get_bookmarks(book_id, user_id):
         with get_connection() as session:
             return (
                 session.query(Bookmark)
-                .filter_by(book_id=book_id)
+                .filter_by(book_id=book_id,
+                           user_id=user_id)
                 .order_by(Bookmark.id.asc())
                 .all()
             )

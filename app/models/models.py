@@ -101,15 +101,17 @@ class Bookmark(Base):
     book_id = Column(Integer, ForeignKey("books.id"), nullable=False)
     position = Column(Float)
     cfi = Column(String(500), nullable=True)
+    user_id = Column(Integer)
     book = relationship(
         "Book",
         back_populates = "bookmarked_by"
     )
-    def __init__(self, book_id, title, position, cfi):
+    def __init__(self, book_id, title, position, cfi, user_id):
         self.book_id = book_id
         self.title = title
         self.position = position
         self.cfi = cfi
+        self.user_id = user_id
 
 class Note(Base):
     __tablename__ = "notes"
@@ -120,18 +122,19 @@ class Note(Base):
     cfi = Column(String(500), nullable=True)  # CFI для точного позиционирования
     selected_text = Column(Text, nullable=True)  # Выделенный текст
     comment = Column(Text, nullable=True)
+    user_id = Column(Integer)
     note = relationship(
         "Book",
         back_populates = "noted_by"
     )
-    def __init__(self, book_id, title, position, selected_text, cfi, comment):
+    def __init__(self, book_id, title, position, selected_text, cfi, comment, user_id):
         self.book_id = book_id
         self.title = title
         self.poistion = position
         self.selected_text = selected_text
         self.cfi = cfi
         self.comment = comment
-
+        self.user_id = user_id
 
 
 class ReadingHistory(Base):

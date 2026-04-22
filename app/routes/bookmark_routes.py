@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from services.bookmark_service import BookmarkService
 
 bookmark_bp = Blueprint("bookmark_bp", __name__)
@@ -14,7 +14,7 @@ def add_cors_headers(response):
 
 @bookmark_bp.route("/bookmarks/<int:book_id>", methods=["GET"])
 def get_bookmarks(book_id):
-    bookmarks = BookmarkService.get_bookmarks(book_id)
+    bookmarks = BookmarkService.get_bookmarks(book_id, session["user_id"])
 
     return jsonify([
         {
@@ -38,7 +38,7 @@ def create_bookmark(book_id):
     print("\n\n\n",position,"\n\n\n",flush=True)
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
-    bm = BookmarkService.create_bookmark(book_id, title, position, cfi)
+    bm = BookmarkService.create_bookmark(book_id, title, position, cfi, session["user_id"])
     print("Создал закладку",flush=True)
     return jsonify({
         "id": "",

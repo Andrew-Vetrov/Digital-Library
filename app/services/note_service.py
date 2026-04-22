@@ -4,9 +4,9 @@ from models.models import User, Book, Favourite, Bookmark, Note
 
 class NoteService:
     @staticmethod
-    def create_note(book_id, title, position, selected_text, cfi, comment):
+    def create_note(book_id, title, position, selected_text, cfi, comment, user_id):
         with get_connection() as session:
-            bm = Note(book_id=book_id, title=title, position=position, selected_text=selected_text, cfi=cfi, comment=comment)
+            bm = Note(book_id=book_id, title=title, position=position, selected_text=selected_text, cfi=cfi, comment=comment, user_id=user_id)
             bm.position=position
             session.add(bm)
             session.commit()
@@ -14,11 +14,12 @@ class NoteService:
             return bm
         
     @staticmethod
-    def get_notes(book_id):
+    def get_notes(book_id, user_id):
         with get_connection() as session:
             return (
                 session.query(Note)
-                .filter_by(book_id=book_id)
+                .filter_by(book_id=book_id,
+                           user_id=user_id)
                 .order_by(Note.id.asc())
                 .all()
             )
