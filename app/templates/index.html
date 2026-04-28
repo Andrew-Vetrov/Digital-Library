@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -33,6 +32,15 @@
 </head>
 
 <body>
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+  <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-text">
+        </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
     <header class="bg-dark py-2">
         <div class="container-fluid d-flex align-items-center justify-content-between">
             {% if authorized == 0 %}
@@ -47,6 +55,7 @@
                     Пользователь: {{username}}
                 </div>
                 <a href="/upload_file" class="btn btn-success btn-sm">Загрузить файл</a>
+                <a href="/friends" class="btn btn-info btn-sm">Друзья</a>
                 <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
             </div>
             {% endif %}
@@ -110,6 +119,7 @@
 {% endif %}
 
     <footer></footer>
+
 </body>
 
 </html>

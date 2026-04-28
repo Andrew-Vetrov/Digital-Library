@@ -3,6 +3,8 @@ from datetime import datetime
 from sqlalchemy.orm import relationship
 from db import Base
 
+import uuid
+
 
 class Favourite(Base):
     __tablename__ = "favourites"
@@ -24,6 +26,7 @@ class User(Base):
     email = Column(String(64), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=False)
     has_read_book_achievement = Column(Boolean, default=False)
+    invite_token = Column(String(64), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     favorites = relationship(
         "Favourite",
         back_populates="user",
@@ -46,6 +49,7 @@ class User(Base):
         self.username = username
         self.email = email
         self.password_hash = password_hash
+        self.invite_token = str(uuid.uuid4())
 
 
 class Book(Base):
@@ -172,3 +176,16 @@ class SearchHistory(Base):
         self.user_id = user_id
         self.query = query
         self.created_at = datetime.utcnow()
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+    
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    friend_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String(20), default="pending") # 'pending' или 'accepted'
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    friend = relationship("User", foreign_keys=[friend_id])
