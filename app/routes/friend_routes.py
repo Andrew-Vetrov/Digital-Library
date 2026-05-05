@@ -1,5 +1,7 @@
 from flask import Blueprint, request, session, jsonify, redirect, url_for, flash, render_template
 from services.user_service import UserService, FriendService
+from models.models import User, Bookmark, Note
+from db import get_connection
 
 friends_bp = Blueprint('friends', __name__)
 
@@ -105,3 +107,57 @@ def remove_friend():
     if FriendService.remove_friendship(uid, friend_id):
         return jsonify({"success": True}), 200
     return jsonify({"error": "Связь не найдена"}), 404
+
+
+@friends_bp.route('/api/books/<int:book_id>/social-activity')
+def get_book_social_activity(book_id):
+    my_id = session.get("user_id")
+    if not my_id:
+        return jsonify([]), 401
+
+    # 1. Получаем список ID всех друзей
+    friends = FriendService.get_all_friends(my_id)
+    friend_ids = [f.id for f in friends]
+
+    if not friend_ids:
+        return jsonify([])
+
+    with get_connection() as session_db:
+        # 2. Собираем закладки друзей для этой книги
+        bookmarks = session_db.query(Bookmark, User.username).join(
+        User, Bookmark.user_id == User.id
+        ).filter(
+            Bookmark.book_id == book_id,
+            Bookmark.user_id.in_(friend_ids)
+        ).all()
+
+        # 3. Собираем заметки друзей для этой книги
+        notes = session_db.query(Note, User.username).join(
+        User, Note.user_id == User.id
+        ).filter(
+            Note.book_id == book_id,
+            Note.user_id.in_(friend_ids)
+        ).all()
+
+        # Формируем единый список активностей
+        activity = []
+        for b, uname in bookmarks:
+            activity.append({
+                "type": "bookmark",
+                "username": uname,
+                "title": b.title,
+                "position": b.position, # Относительная позиция 0-1
+                "cfi": b.cfi
+            })
+        
+        for n, uname in notes:
+            activity.append({
+                "type": "note",
+                "username": uname,
+                "text": n.selected_text,
+                "comment": n.comment,
+                "position": n.position,
+                "cfi": n.cfi
+            })
+
+        return jsonify(activity)

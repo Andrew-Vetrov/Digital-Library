@@ -145,6 +145,38 @@ class Reader {
         });
     }
 
+    async renderFriendsNotes(overlayer) {
+        if (!this.#bookId) return;
+        
+        try {
+            const res = await fetch(`/api/books/${this.#bookId}/social-activity`);
+            const activities = await res.json();
+
+            activities.forEach(act => {
+                if (act.type === 'note' && act.cfi) {
+                    overlayer.add(act.cfi, (range, rects) => {
+                        const highlight = document.createElement('div');
+                        highlight.className = 'friend-note-highlight';
+                        highlight.title = `${act.username}: ${act.comment || 'Без комментария'}`;
+                        
+                        highlight.onclick = (e) => {
+                            e.stopPropagation();
+                            this.showFriendComment(act.username, act.text, act.comment);
+                        };
+                        
+                        return highlight;
+                    });
+                }
+            });
+        } catch (e) {
+            console.error("Ошибка отрисовки заметок друзей:", e);
+        }
+    }
+
+    showFriendComment(author, text, comment) {
+        // Используем встроенный alert или твою систему уведомлений
+        alert(`Заметка от ${author}\nЦитата: "${text}"\n\nКомментарий: ${comment || 'пусто'}`);
+    }
     
     showNotePopup(note) {
         const popup = document.createElement('div')
@@ -1457,98 +1489,137 @@ getSelectionCFI() {
     console.log('Не найдено активного выделения')
     return null
 }
-
-async loadNotes() {
-    if (!this.#bookId) return
-
-    const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
-    
-    if (!response.ok) {
-        console.error("Failed to load notes")
-        return
-    }
-    
-    const notes = await response.json()
-    console.log('Загружено заметок:', notes.length)
-
-    
-    // ЗАГРУЖАЕМ ЗАМЕТКИ В VIEW (для подсветки в тексте)
-    if (this.view) {
-        this.view.loadNotesForBook(this.#bookId, notes)
-    }
-    
-    const container = document.getElementById("notes-list")
-    if (!container) return
-    
-    if (notes.length === 0) {
-        container.innerHTML = '<div class="empty-state">Нет заметок</div>'
-        return
-    }
-
-    container.innerHTML = ""
-    notes.forEach(n => {
-        const item = document.createElement("div")
-        item.className = "note-item"
-        item.innerHTML = `
-            <div class="note-header">
-                <strong>${n.title}</strong>
-                <span class="note-position">${Math.round(n.position * 100)}%</span>
-            </div>
-            <div class="note-preview">${n.selected_text || n.text?.substring(0, 50) || ''}...</div>
-            <div class="note-actions">
-                <button data-pos="${n.position}" data-id="${n.id}" data-cfi="${n.cfi || ''}" class="jump">Перейти</button>
-                <button data-id="${n.id}" class="del">❌</button>
-            </div>
-        `
-        container.appendChild(item)
-    })
-
-    container.addEventListener("click", e => {
-        if (e.target.classList.contains("jump")) {
-            const pos = parseFloat(e.target.dataset.pos)
-            const noteId = e.target.dataset.id
-            const cfi = e.target.dataset.cfi
+    async loadSocialMarkers(bookId) {
+        console.log("ZHOPA = ", this.#bookId)
+        try {
+            const res = await fetch(`/api/books/${bookId}/social-activity`);
+            const activities = await res.json();
             
-            if (cfi) {
-                console.log("CFI PARSED")
-                this.view.goTo(cfi)
-            } else if (pos) {
-                this.view.goToFraction(pos)
-            }
-            this.closeSideBar()
-        }
-        if (e.target.classList.contains("del")) {
-            this.deleteNote(e.target.dataset.id)
-        }
-    })
+            const container = document.getElementById('presence-markers-container');
+            if (!container) return;
 
-    return notes
-}
+            activities.forEach(act => {
+                const marker = document.createElement('div');
+                marker.className = `social-marker ${act.type}-marker`;
+                
+                // Позиционируем точку на прогресс-баре (position от 0 до 1)
+                marker.style.left = `${act.position * 100}%`;
+                
+                // Подсказка при наведении
+                const tooltipText = act.type === 'bookmark' 
+                    ? `📌 ${act.username}: ${act.title}`
+                    : `📝 ${act.username}: "${act.text}" \n 💬 ${act.comment || ''}`;
+                
+                marker.title = tooltipText;
 
-async getNotesData() {
-    if (!this.#bookId) return []
-    
-    try {
-        const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
-        if (!response.ok) return []
-        return await response.json()
-    } catch (error) {
-        console.error('Ошибка загрузки заметок:', error)
-        return []
+                // Клик по маркеру — переход к месту в книге
+                marker.onclick = (e) => {
+                    e.stopPropagation();
+                    if (window.reader && act.cfi) {
+                        window.reader.view.goToCFI(act.cfi);
+                    }
+                };
+
+                container.appendChild(marker);
+            });
+        } catch (e) {
+            console.error("Ошибка загрузки социальных меток", e);
+        }
     }
-}
 
-async deleteNote(id) {
-    await fetch(`http://localhost:3000/notes/${id}`, {
-        method: "DELETE"
-    })
+    async loadNotes() {
+        if (!this.#bookId) return
 
-    // УДАЛЯЕМ ВЫДЕЛЕНИЕ ИЗ VIEW
-    this.view.removeNoteHighlight(parseInt(id))
-    
-    // ПЕРЕЗАГРУЖАЕМ СПИСОК
-    await this.loadNotes()
-}
+        const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
+        
+        if (!response.ok) {
+            console.error("Failed to load notes")
+            return
+        }
+        
+        const notes = await response.json()
+        console.log('Загружено заметок:', notes.length)
+
+        
+        // ЗАГРУЖАЕМ ЗАМЕТКИ В VIEW (для подсветки в тексте)
+        if (this.view) {
+            this.view.loadNotesForBook(this.#bookId, notes)
+        }
+        
+        const container = document.getElementById("notes-list")
+        if (!container) return
+        
+        if (notes.length === 0) {
+            container.innerHTML = '<div class="empty-state">Нет заметок</div>'
+            return
+        }
+
+        container.innerHTML = ""
+        notes.forEach(n => {
+            const item = document.createElement("div")
+            item.className = "note-item"
+            item.innerHTML = `
+                <div class="note-header">
+                    <strong>${n.title}</strong>
+                    <span class="note-position">${Math.round(n.position * 100)}%</span>
+                </div>
+                <div class="note-preview">${n.selected_text || n.text?.substring(0, 50) || ''}...</div>
+                <div class="note-actions">
+                    <button data-pos="${n.position}" data-id="${n.id}" data-cfi="${n.cfi || ''}" class="jump">Перейти</button>
+                    <button data-id="${n.id}" class="del">❌</button>
+                </div>
+            `
+            container.appendChild(item)
+        })
+
+        container.addEventListener("click", e => {
+            if (e.target.classList.contains("jump")) {
+                const pos = parseFloat(e.target.dataset.pos)
+                const noteId = e.target.dataset.id
+                const cfi = e.target.dataset.cfi
+                
+                if (cfi) {
+                    console.log("CFI PARSED")
+                    this.view.goTo(cfi)
+                } else if (pos) {
+                    this.view.goToFraction(pos)
+                }
+                this.closeSideBar()
+            }
+            if (e.target.classList.contains("del")) {
+                this.deleteNote(e.target.dataset.id)
+            }
+        })
+
+        return notes
+    }
+
+
+
+    async getNotesData() {
+        if (!this.#bookId) return []
+        
+        try {
+            const response = await fetch(`http://localhost:3000/notes/${this.#bookId}`)
+            if (!response.ok) return []
+            return await response.json()
+        } catch (error) {
+            console.error('Ошибка загрузки заметок:', error)
+            return []
+        }
+    }
+
+    async deleteNote(id) {
+        await fetch(`http://localhost:3000/notes/${id}`, {
+            method: "DELETE"
+        })
+
+        // УДАЛЯЕМ ВЫДЕЛЕНИЕ ИЗ VIEW
+        this.view.removeNoteHighlight(parseInt(id))
+        
+        // ПЕРЕЗАГРУЖАЕМ СПИСОК
+        await this.loadNotes()
+    }
 
 
 
@@ -1620,6 +1691,7 @@ async deleteNote(id) {
                         }
                     }
                 }, 1000)
+                this.renderFriendsNotes(this.#bookId, Overlayer);
             }
         })
         await this.view.open(file)
@@ -1714,10 +1786,13 @@ async deleteNote(id) {
         } else {
             this.view.renderer.next()
         }
-
+        this.loadSocialMarkers(this.#bookId);
         this.bookId = file.name; // Используем имя файла или ID из БД как ключ комнаты
+        
         this.initPresence();
     }
+    
+
 
     initPresence() {
         this.socket = io("http://localhost:3000");
@@ -1771,7 +1846,16 @@ async deleteNote(id) {
             
             // Ставим точку на полосе (fraction — это число от 0 до 1)
             marker.style.left = `${fraction * 100}%`;
+            marker.style.cursor = 'pointer'; // Делаем курсор кликабельным
+            marker.style.pointerEvents = 'auto'; // Убеждаемся, что события проходят
             
+            marker.onclick = (e) => {
+                e.stopPropagation(); // Чтобы не сработал клик по самому прогресс-бару
+                if (data.cfi) {
+                    console.log(`Прыгаем к пользователю ${username} на позицию:`, data.cfi);
+                    this.view.goTo(data.cfi); // Переход к месту в книге
+                }
+            };
             markersContainer.appendChild(marker);
         }
     });

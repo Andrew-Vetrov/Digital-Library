@@ -34,10 +34,12 @@ def authorization():
         result_password = UserService.find_password_by_email(email)
         if result_password and result_password != password:
             d["result_of_authorization"] = 2  # неправильный пароль
+            return render_template("authorization.html", **d)
         else:
             d["result_of_authorization"] = 3  # неправильный email
+            return render_template("authorization.html", **d)
 
-    return render_template("authorization.html", **d)
+    return redirect(url_for("index"))
 
 
 @auth_bp.route("/registration", methods=["GET", "POST"])
@@ -60,12 +62,15 @@ def registration():
         session["authorized"] = username
         result = UserService.find_by_email(email, password)
         session["user_id"] = result[0].id
+        return redirect(url_for("index"))
     if not username_ok:
         error_dict["wrong_username"] = 1
+        return render_template("registration.html", **error_dict)
     if not email_ok:
         error_dict["wrong_email"] = 1
+        return render_template("registration.html", **error_dict)
 
-    return render_template("registration.html", **error_dict)
+    
 
 @auth_bp.route("/sign_out")
 def sign_out():
