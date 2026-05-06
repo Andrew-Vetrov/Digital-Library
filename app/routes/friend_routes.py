@@ -161,3 +161,38 @@ def get_book_social_activity(book_id):
             })
 
         return jsonify(activity)
+
+
+@friends_bp.route('/api/users/search')
+def search_users_api():
+    uid = session.get("user_id")
+    query = request.args.get('q', '').strip()
+    page = int(request.args.get('page', 0))
+    limit = 5
+
+    if not uid or len(query) < 1:
+        return jsonify([])
+
+    related_ids = UserService.get_related_user_ids(uid)
+
+    offset = page * limit
+    users = UserService.search_users(query, uid, offset=offset, limit=limit)
+
+    return jsonify([{
+        "id": u.id,
+        "username": u.username,
+        "already_linked": u.id in related_ids
+    } for u in users])
+
+@friends_bp.route('/friends/add_by_id', methods=['POST'])
+def add_friend_by_id():
+    current_user_id = session.get("user_id")
+    if not current_user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json()
+    friend_id = data.get('friend_id')
+
+    if FriendService.send_friend_request_by_id(current_user_id, friend_id):
+        return jsonify({"message": "Заявка отправлена!"}), 200
+    return jsonify({"error": "Не удалось отправить заявку"}), 400

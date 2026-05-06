@@ -1,7 +1,7 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.models import Book, ReadingHistory
+from models.models import Book, ReadingHistory, BookRating
 from datetime import datetime
 from db import get_connection
 from services.elasticsearch_service import index_book
@@ -175,3 +175,32 @@ class BookService:
                 books_with_progress.append(book)
             
             return books_with_progress
+
+    @staticmethod
+    def set_book_rating(user_id, book_id, score):
+        with get_connection() as session:
+            if not (1 <= score <= 5):
+                return False
+
+            rating = session.query(BookRating).filter_by(user_id=user_id, book_id=book_id).first()
+
+            if rating:
+                rating.score = score
+            else:
+                rating = BookRating(user_id=user_id, book_id=book_id, score=score)
+                session.add(rating)
+
+            session.commit()
+
+            all_ratings = session.query(BookRating).filter_by(book_id=book_id).all()
+
+            if all_ratings:
+                avg = sum(r.score for r in all_ratings) / len(all_ratings)
+
+                book = session.query(Book).get(book_id)
+                if book:
+                    book.average_rating = round(avg, 2)
+                    session.commit()
+                    return True
+
+            return False

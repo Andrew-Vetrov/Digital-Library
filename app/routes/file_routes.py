@@ -4,7 +4,7 @@ from minio import Minio
 from services.book_service import BookService
 from minio.error import S3Error
 from datetime import timedelta
-from models.models import Book
+from models.models import Book, BookRating
 from db import get_connection
 from services.elasticsearch_service import search_books, semantic_search, add_search_history, get_search_history
 import sys
@@ -100,8 +100,17 @@ def list_files():
 
     query = request.args.get("q")
     semantic = request.args.get("semantic") == "on"
+    sort_by = request.args.get('sort', 'title')
+    order = request.args.get('order', 'asc')
 
     user_id = session.get("user_id")
+
+    user_ratings = {}
+    if user_id:
+        with get_connection() as db_session:
+            ratings = db_session.query(BookRating).filter_by(user_id=user_id).all()
+            user_ratings = {r.book_id: r.score for r in ratings}
+
     if user_id and query and query.strip():
         add_search_history(user_id, query.strip())
 
@@ -111,43 +120,77 @@ def list_files():
         else:
             es_results = search_books(query.strip())
 
-        book_ids = []
-        for r in es_results:
-            book_ids.append(r["id"])
-
+        book_ids = [r["id"] for r in es_results]
         books = BookService.find_books(book_ids)
-
-        return render_template("files.html", books=books, genres=[], request=request)
+    else:
+        books = BookService.find_books()
 
     author = request.args.get("author")
     publisher = request.args.get("publisher")
     genre = request.args.get("genre")
 
+    if author:
+        books = [b for b in books if b.author and author.lower() in b.author.lower()]
+    if publisher:
+        books = [b for b in books if b.publisher and publisher.lower() in b.publisher.lower()]
+    if genre:
+        books = [b for b in books if b.genre == genre]
+
+    reverse_order = (order == 'desc')
+
+    if sort_by == 'rating':
+        books.sort(key=lambda b: getattr(b, 'average_rating', 0.0) or 0.0, reverse=reverse_order)
+    else:
+        books.sort(key=lambda b: (b.title or "").lower(), reverse=reverse_order)
+
     try:
-        books = BookService.find_books()
-
-        if author:
-            books = [b for b in books if author.lower() in b.author.lower()]
-
-        if publisher:
-            books = [b for b in books if b.publisher and publisher.lower() in b.publisher.lower()]
-
-        if genre:
-            books = [b for b in books if b.genre == genre]
-
         for book in books:
+            book.user_score = user_ratings.get(book.id)
+
             if getattr(book, "cover_key", None):
                 book.cover_url = f"{PUBLIC_ENDPOINT}/{BUCKET_NAME}/{book.cover_key}"
             else:
                 book.cover_url = None
 
-        all_books = BookService.find_books()
-        genres = sorted({b.genre for b in all_books if b.genre})
+        all_books_for_genres = BookService.find_books()
+        genres = sorted({b.genre for b in all_books_for_genres if b.genre})
 
-        return render_template("files.html", books=books, genres=genres, request=request)
+        return render_template("files.html",
+                               books=books,
+                               genres=genres,
+                               request=request,
+                               current_sort=sort_by,
+                               current_order=order)
 
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка: {e}")
+
+
+@file_bp.route("/rate/<int:book_id>", methods=["POST"])
+def rate_book(book_id):
+    user_id = session.get("user_id")
+    if not session.get("authorized") or not user_id:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    data = request.get_json()
+    if not data or 'score' not in data:
+        return jsonify({"error": "Missing score"}), 400
+
+    try:
+        score = int(data['score'])
+        success = BookService.set_book_rating(user_id, book_id, score)
+
+        if success:
+            book = BookService.find_book_by_id(book_id)
+            return jsonify({
+                "success": True,
+                "new_rating": book.average_rating or 0.0,
+                "user_score": score
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"success": False}), 400
 
 @file_bp.route("/search_history", methods=["GET"])
 def query_list():

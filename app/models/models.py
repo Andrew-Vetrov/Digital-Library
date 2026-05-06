@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, ForeignKey, Float, Text, DateTime, Boolean
+from sqlalchemy import Column, String, Integer, ForeignKey, Float, Text, DateTime, Boolean, UniqueConstraint
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from db import Base
@@ -57,6 +57,8 @@ class Book(Base):
 
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False)
+    average_rating = Column(Float, default=0.0)
+    ratings = relationship('BookRating', backref='book', lazy=True)
     author = Column(String(255), nullable=False)
     language = Column(String(50))
     genre = Column(String(100))
@@ -189,3 +191,14 @@ class Friendship(Base):
 
     user = relationship("User", foreign_keys=[user_id])
     friend = relationship("User", foreign_keys=[friend_id])
+
+
+class BookRating(Base):
+    __tablename__ = 'book_ratings'
+
+    id = Column(Integer, primary_key=True)
+    score = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
+
+    __table_args__ = (UniqueConstraint('user_id', 'book_id', name='_user_book_rating_uc'),)

@@ -50,7 +50,7 @@
             </div>
             {% else %}
             <div class="d-flex align-items-center gap-2">
-                <div class="badge bg-warning text-wrap d-flex align-items-center justify-content-center" 
+                <div class="badge bg-warning text-wrap d-flex align-items-center justify-content-center"
                     style="height: 32px; font-size: 13px; min-width: 120px;">
                     Пользователь: {{username}}
                 </div>
@@ -59,7 +59,7 @@
                 <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
             </div>
             {% endif %}
-            
+
             <a href="/files" class="btn btn-primary btn-sm">Все файлы</a>
         </div>
     </header>
@@ -93,7 +93,7 @@
                 <img src="/cover/{{ book.id }}" class="book-cover" alt="">
                 <h6 class="mt-2">{{ book.title }}</h6>
                 <p class="text-muted" style="font-size: 12px;">{{ book.author }}</p>
-                
+
                 <a href="/reader/{{ book.id }}" class="btn btn-primary btn-sm">Читать</a>
 
                 <h6 class="mt-2">Прогресс: {{ (book.last_position*100)|round(2) }}%</h6>

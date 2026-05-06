@@ -59,24 +59,45 @@ class UserService:
         with get_connection() as session:
             return session.query(User).filter(User.invite_token == token).first()
 
+    @staticmethod
+    def search_users(query, current_user_id, offset=0, limit=5):
+        with get_connection() as session:
+            return session.query(User).filter(
+                User.username.ilike(f"%{query}%"),
+                User.id != current_user_id
+            ).order_by(User.username).offset(offset).limit(limit).all()
 
+    @staticmethod
+    def get_related_user_ids(user_id):
+        with get_connection() as session:
+            related = session.query(Friendship).filter(
+                (Friendship.user_id == user_id) | (Friendship.friend_id == user_id)
+            ).all()
+
+            ids = set()
+            for f in related:
+                ids.add(f.user_id)
+                ids.add(f.friend_id)
+
+            if user_id in ids:
+                ids.remove(user_id)
+
+            return ids
 
 class FriendService:
     @staticmethod
-    def send_friend_request(user_id, friend_username):
+    def send_friend_request_by_id(user_id, friend_id):
         with get_connection() as session:
-            friend = session.query(User).filter(User.username == friend_username).first()
-            if not friend or friend.id == user_id:
+            if user_id == friend_id:
                 return False
-            
-            # Проверяем, нет ли уже такой связи
+
             exists = session.query(Friendship).filter(
-                ((Friendship.user_id == user_id) & (Friendship.friend_id == friend.id)) |
-                ((Friendship.user_id == friend.id) & (Friendship.friend_id == user_id))
+                ((Friendship.user_id == user_id) & (Friendship.friend_id == friend_id)) |
+                ((Friendship.user_id == friend_id) & (Friendship.friend_id == user_id))
             ).first()
-            
+
             if not exists:
-                new_request = Friendship(user_id=user_id, friend_id=friend.id, status="pending")
+                new_request = Friendship(user_id=user_id, friend_id=friend_id, status="pending")
                 session.add(new_request)
                 session.commit()
                 return True
