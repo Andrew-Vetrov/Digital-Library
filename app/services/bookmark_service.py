@@ -4,13 +4,14 @@ from models.models import User, Book, Favourite, Bookmark
 
 class BookmarkService:
     @staticmethod
-    def create_bookmark(book_id, title, position, cfi, user_id):
+    def create_bookmark(book_id, title, position, cfi, user_id, is_shared):
         with get_connection() as session:
-            bm = Bookmark(book_id=book_id, title=title, position=position, cfi=cfi, user_id=user_id)
+            bm = Bookmark(book_id=book_id, title=title, position=position, cfi=cfi, user_id=user_id, is_shared=is_shared)
             bm.position=position
             session.add(bm)
             session.commit()
-            return
+            session.refresh(bm)
+            return bm
     @staticmethod
     def get_bookmarks(book_id, user_id):
         with get_connection() as session:
@@ -23,7 +24,7 @@ class BookmarkService:
             )
     
     @staticmethod
-    def update_bookmark(bookmark_id, title=None):
+    def update_bookmark(bookmark_id, title=None, is_shared = None):
         with get_connection() as session:
             bookmark = session.query(Bookmark).filter_by(id=bookmark_id).first()
             if not bookmark:
@@ -31,7 +32,7 @@ class BookmarkService:
             
             if title is not None:
                 bookmark.title = title
-                        
+            if is_shared is not None: bookmark.is_shared = is_shared
             session.commit()
             session.refresh(bookmark)
             return bookmark

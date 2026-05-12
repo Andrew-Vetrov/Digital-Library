@@ -584,6 +584,12 @@ body {
     color: white !important;
 }
 
+.note-actions .edit {
+    background: #2196F3 !important;
+    color: white !important;
+}
+
+
 .bookmark-actions .edit:hover {
     background: #1976D2 !important;
 }
@@ -788,6 +794,46 @@ body {
 .friend-note-highlight:hover {
     background-color: rgba(25, 135, 84, 0.4);
 }
+
+.social-bookmark-marker {
+    position: absolute;
+    top: -5px; /* Чуть выше основной линии */
+    width: 12px;
+    height: 12px;
+    background-color: #3498db; /* Синий цвет для закладок */
+    clip-path: polygon(50% 0%, 100% 100%, 50% 80%, 0% 100%); /* Форма флажка */
+    cursor: pointer;
+    z-index: 101;
+    transition: transform 0.2s;
+}
+
+.social-bookmark-marker:hover {
+    transform: scale(1.4);
+    background-color: #2980b9;
+}
+
+/* Стили для подсказки (опционально) */
+.social-bookmark-marker::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    display: none;
+}
+
+.social-bookmark-marker:hover::after {
+    display: block;
+}
+
+
+
 </style>
 
 <div id="dimming-overlay" aria-hidden="true"></div>
@@ -814,16 +860,32 @@ body {
     
     <div class="tab-content" id="notes-tab">
         <div id="notes-section">
-            <h3>📝 Заметки</h3>
-            <div id="notes-list"></div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <h3 style="margin: 0;">📝 Заметки</h3>
+            <div class="sub-tabs" style="display: flex; gap: 5px; background: #eee; padding: 3px; border-radius: 6px;">
+                <button class="sub-tab-btn active" id="btn-my-notes" 
+                    style="border: none; background: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Мои</button>
+                <button class="sub-tab-btn" id="btn-friends-notes" 
+                    style="border: none; background: transparent; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Друзья</button>
+            </div>
         </div>
+        <div id="notes-list"></div>
+    </div>
     </div>
     
     <div class="tab-content" id="bookmarks-tab">
         <div id="bookmarks-section">
-            <h3>🔖 Закладки</h3>
-            <div id="bookmark-list"></div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <h3 style="margin: 0;">🔖 Закладки</h3>
+            <div class="sub-tabs" style="display: flex; gap: 5px; background: #eee; padding: 3px; border-radius: 6px;">
+                <button class="sub-tab-btn active" id="btn-my-bookmarks" 
+                    style="border: none; background: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Мои</button>
+                <button class="sub-tab-btn" id="btn-friends-bookmarks" 
+                    style="border: none; background: transparent; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">Друзья</button>
+            </div>
         </div>
+        <div id="bookmark-list"></div>
+    </div>
     </div>
 </div>
 

@@ -42,7 +42,8 @@ def create_note(book_id):
     print("\n\n\n",position,"\n\n\n",flush=True)
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
-    bm = NoteService.create_note(book_id, title, position, selected_text, cfi, comment, session["user_id"])
+    bm = NoteService.create_note(book_id, title, position, selected_text, cfi, comment, session["user_id"],
+                                 is_shared = data.get("is_shared"))
     print("Создал заметку",flush=True)
     return jsonify({
         "id": bm.id,
@@ -50,7 +51,8 @@ def create_note(book_id):
         "position": bm.position,
         "selected_text":bm.selected_text,
         "cfi": bm.cfi,
-        "comment": bm.comment
+        "comment": bm.comment,
+        "is_shared": bm.is_shared
     }), 201
 
 @note_bp.route("/notes/<int:note_id>", methods=["PUT"])
@@ -66,7 +68,7 @@ def update_note(note_id):
         return jsonify({"error": "No fields to update"}), 400
     
     # Обновляем заметку
-    updated_note = NoteService.update_note(note_id, title, comment)
+    updated_note = NoteService.update_note(note_id, title, comment, is_shared=data.get("is_shared"))
     
     if not updated_note:
         return jsonify({"error": "Note not found"}), 404
@@ -77,7 +79,8 @@ def update_note(note_id):
         "position": updated_note.position,
         "selected_text": updated_note.selected_text,
         "cfi": updated_note.cfi,
-        "comment": updated_note.comment
+        "comment": updated_note.comment,
+        "is_shared" : updated_note.is_shared
     })
 
 

@@ -196,3 +196,55 @@ def add_friend_by_id():
     if FriendService.send_friend_request_by_id(current_user_id, friend_id):
         return jsonify({"message": "Заявка отправлена!"}), 200
     return jsonify({"error": "Не удалось отправить заявку"}), 400
+
+
+@friends_bp.route("/social/bookmarks/<int:book_id>")
+def get_friend_bookmarks(book_id):
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify([]), 401
+    
+    # 1. Получаем список ID друзей пользователя
+    friend_ids = FriendService.get_friends_ids(user_id)
+    
+    # 2. Запрашиваем закладки этих друзей для конкретной книги с фильтром is_shared
+    with get_connection() as session_db:
+        shared_bookmarks = session_db.query(Bookmark, User.username).join(
+            User, Bookmark.user_id == User.id
+        ).filter(
+            Bookmark.book_id == book_id,
+            Bookmark.user_id.in_(friend_ids),
+            Bookmark.is_shared == True
+        ).all()
+        
+    return jsonify([{
+        "id": bm.Bookmark.id,
+        "username": bm.username,
+        "title": bm.Bookmark.title,
+        "cfi": bm.Bookmark.cfi,
+        "position": bm.Bookmark.position
+    } for bm in shared_bookmarks])
+
+@friends_bp.route("/social/notes/<int:book_id>")
+def get_friend_notes(book_id):
+    user_id = session.get("user_id")
+    friend_ids = FriendService.get_friends_ids(user_id) # Твой метод получения ID друзей
+    
+    with get_connection() as session_db:
+        shared_notes = session_db.query(Note, User.username).join(
+            User, Note.user_id == User.id
+        ).filter(
+            Note.book_id == book_id,
+            Note.user_id.in_(friend_ids),
+            Note.is_shared == True
+        ).all()
+        
+    return jsonify([{
+        "id": n.Note.id,
+        "username": n.username,
+        "title": n.Note.title,
+        "text": n.Note.selected_text,
+        "comment": n.Note.comment,
+        "cfi": n.Note.cfi,
+        "position": n.Note.position
+    } for n in shared_notes])

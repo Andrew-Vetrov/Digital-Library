@@ -4,9 +4,10 @@ from models.models import User, Book, Favourite, Bookmark, Note
 
 class NoteService:
     @staticmethod
-    def create_note(book_id, title, position, selected_text, cfi, comment, user_id):
+    def create_note(book_id, title, position, selected_text, cfi, comment, user_id, is_shared):
         with get_connection() as session:
-            bm = Note(book_id=book_id, title=title, position=position, selected_text=selected_text, cfi=cfi, comment=comment, user_id=user_id)
+            bm = Note(book_id=book_id, title=title, position=position, selected_text=selected_text, cfi=cfi, comment=comment, user_id=user_id,
+                       is_shared = is_shared)
             bm.position=position
             session.add(bm)
             session.commit()
@@ -30,7 +31,7 @@ class NoteService:
             return session.query(Note).filter_by(id=note_id).first()
     
     @staticmethod
-    def update_note(note_id, title=None, comment=None):
+    def update_note(note_id, title=None, comment=None, is_shared=None):
         with get_connection() as session:
             note = session.query(Note).filter_by(id=note_id).first()
             if not note:
@@ -40,7 +41,7 @@ class NoteService:
                 note.title = title
             if comment is not None:
                 note.comment = comment
-            
+            if is_shared is not None: note.is_shared = is_shared
             
             
             session.commit()

@@ -145,6 +145,78 @@ class Reader {
         });
     }
 
+    initBookmarkSubTabs = () => {
+        const myBtn = document.getElementById('btn-my-bookmarks');
+        const friendsBtn = document.getElementById('btn-friends-bookmarks');
+
+        const setActive = (activeBtn, inactiveBtn) => {
+            activeBtn.style.background = 'white';
+            activeBtn.classList.add('active');
+            inactiveBtn.style.background = 'transparent';
+            inactiveBtn.classList.remove('active');
+        };
+
+        myBtn.onclick = async () => {
+            setActive(myBtn, friendsBtn);
+            // Вызываем твой стандартный метод загрузки своих закладок
+            await this.loadBookmarks(); 
+        };
+
+        friendsBtn.onclick = async () => {
+            setActive(friendsBtn, myBtn);
+            // Вызываем новый метод загрузки закладок друзей
+            await this.loadFriendBookmarks(); 
+        };
+    };
+
+    async loadFriendBookmarks() {
+        try {
+            const response = await fetch(`http://localhost:3000/social/bookmarks/${this.#bookId}`);
+            const bookmarks = await response.json();
+            this.renderBookmarkList(bookmarks, true); // true означает, что это чужие закладки
+        } catch (e) {
+            console.error("Ошибка загрузки закладок друзей", e);
+        }
+    }
+
+    // Универсальный рендеринг списка в сайдбаре
+    renderBookmarkList(bookmarks, isFriend = false) {
+        const listContainer = document.getElementById('bookmark-list');
+        listContainer.innerHTML = ''; // Очищаем список
+
+        if (bookmarks.length === 0) {
+            listContainer.innerHTML = `<div style="padding: 10px; color: #888;">${isFriend ? 'Друзья еще не делились закладками' : 'У вас нет закладок'}</div>`;
+            return;
+        }
+
+        bookmarks.forEach(bm => {
+            const item = document.createElement('div');
+            item.style.cssText = `
+                padding: 10px;
+                border-bottom: 1px solid #eee;
+                cursor: pointer;
+                transition: background 0.2s;
+            `;
+            
+            // Для друзей добавляем имя пользователя
+            const authorInfo = isFriend ? `<b style="color: #4CAF50;">${bm.username}:</b> ` : '';
+            
+            item.innerHTML = `
+                <div style="font-size: 14px;">${authorInfo}${bm.title}</div>
+                <div style="font-size: 11px; color: #999;">${Math.round(bm.position * 100)}% книги</div>
+            `;
+
+            item.onclick = () => {
+                console.log(`Переход к ${isFriend ? 'чужой' : 'своей'} закладке:`, bm.cfi);
+                this.view.goTo(bm.cfi); // Прыгаем на позицию
+            };
+
+            item.onmouseenter = () => item.style.background = '#f5f5f5';
+            item.onmouseleave = () => item.style.background = 'transparent';
+
+            listContainer.appendChild(item);
+        });
+    }
     async renderFriendsNotes(overlayer) {
         if (!this.#bookId) return;
         
@@ -179,7 +251,12 @@ class Reader {
     }
     
     showNotePopup(note) {
-        const popup = document.createElement('div')
+        // Удаляем старый попап, если он есть
+        const oldPopup = document.getElementById('active-note-popup');
+        if (oldPopup) oldPopup.remove();
+
+        const popup = document.createElement('div');
+        popup.id = 'active-note-popup';
         popup.style.cssText = `
             position: fixed;
             top: 50%;
@@ -190,138 +267,96 @@ class Reader {
             border-radius: 10px;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
             z-index: 10001;
-            min-width: 350px;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
+            min-width: 380px;
+            max-width: 500px;
             font-family: system-ui, sans-serif;
-        `
-        
-        // ДОБАВЛЯЕМ КОММЕНТАРИЙ В POPUP
-        const commentHTML = note.comment 
-            ? `<div style="
-                    margin-top: 15px;
-                    padding: 12px;
-                    background: #f8f9fa;
-                    border-radius: 6px;
-                    border-left: 4px solid #4CAF50;
-                ">
-                <div style="font-size: 14px; color: #666; margin-bottom: 5px;">
-                    <strong>Комментарий:</strong>
-                </div>
-                <div style="font-size: 15px; color: #333; line-height: 1.5;">
-                    ${note.comment}
-                </div>
-            </div>`
-            : '<div style="margin-top: 15px; color: #999; font-style: italic;">Нет комментария</div>'
-        
+        `;
+
+        // Проверяем, чужая это заметка или наша (по наличию username или сверке ID)
+        const isFriendNote = !!note.username;
+
         popup.innerHTML = `
-            <div style="margin-bottom: 20px;">
-                <h3 style="margin: 0 0 8px 0; color: #333; font-size: 18px;">${note.title || 'Заметка'}</h3>
-                <div style="color: #666; font-size: 13px; margin-bottom: 15px;">
-                    ${note.created_at ? new Date(note.created_at).toLocaleDateString('ru-RU') : ''}
-                </div>
+            <div style="margin-bottom: 15px;">
+                ${isFriendNote 
+                    ? `<h3 style="margin:0; color:#333;">Заметка от ${note.username}</h3>`
+                    : `<label style="display:block; font-size:12px; color:#888; margin-bottom:4px;">Название</label>
+                    <input type="text" id="edit-note-title" value="${note.title || ''}" style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #ddd; border-radius:4px;">`
+                }
             </div>
             
-            <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 6px;">
-                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
-                    <strong>Выделенный текст:</strong>
-                </div>
-                <div style="
-                    font-size: 15px;
-                    color: #333;
-                    line-height: 1.6;
-                    font-style: italic;
-                    border-left: 3px solid #FF9800;
-                    padding-left: 12px;
-                    background: white;
-                    padding: 12px;
-                    border-radius: 4px;
-                ">
+            <div style="margin-bottom: 15px; padding: 12px; background: #f5f5f5; border-radius: 6px; border-left: 3px solid #FF9800;">
+                <div style="font-size: 14px; color: #333; font-style: italic;">
                     "${note.selected_text || note.text || ''}"
                 </div>
             </div>
-            
-            ${commentHTML}
-            
-            <div style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-top: 25px;
-                padding-top: 15px;
-                border-top: 1px solid #eee;
-            ">
-                <div style="color: #666; font-size: 13px;">
-                    Позиция: ${Math.round((note.position || 0) * 100)}%
-                </div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="edit-note" style="
-                        padding: 8px 16px;
-                        background: #2196F3;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 14px;
-                    ">Редактировать</button>
-                    <button id="close-note-popup" style="
-                        padding: 8px 16px;
-                        background: #666;
-                        color: white;
-                        border: none;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        font-size: 14px;
-                    ">Закрыть</button>
-                </div>
-            </div>
-        `
-        
-        document.body.appendChild(popup)
-        
-        // КНОПКА РЕДАКТИРОВАНИЯ
-        popup.querySelector('#edit-note').addEventListener('click', () => {
-            this.editNote(note, popup)
-        })
-        
-        // КНОПКА ЗАКРЫТИЯ
-        popup.querySelector('#close-note-popup').addEventListener('click', () => {
-            document.body.removeChild(popup)
-        })
-        popup.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                document.body.removeChild(popup)
-            }
-            // Останавливаем всплытие
-            e.stopPropagation()
-        })
 
-        // Для всех полей ввода внутри попапа:
-        popup.querySelectorAll('input, textarea, button').forEach(element => {
-            element.addEventListener('keydown', (e) => e.stopPropagation())
-        })
-        // Закрытие по клику вне попапа
-        setTimeout(() => {
-            const closeHandler = (e) => {
-                if (!popup.contains(e.target)) {
-                    document.body.removeChild(popup)
-                    document.removeEventListener('click', closeHandler)
+            <div style="margin-bottom: 15px;">
+                <label style="display:block; font-size:12px; color:#888; margin-bottom:4px;">Комментарий</label>
+                ${isFriendNote 
+                    ? `<div style="padding:10px; background:#f9f9f9; border:1px solid #eee; border-radius:4px; font-size:14px; color:#333;">
+                        ${note.comment || '<i style="color:#999;">Нет комментария</i>'}
+                    </div>`
+                    : `<textarea id="edit-note-comment" style="width:100%; height:80px; padding:8px; box-sizing:border-box; border:1px solid #ddd; border-radius:4px; font-family:inherit;">${note.comment || ''}</textarea>`
                 }
-            }
-            document.addEventListener('click', closeHandler)
-        }, 100)
+            </div>
+            
+            ${!isFriendNote ? `
+            <div style="margin-bottom: 15px;">
+                <label style="cursor:pointer; font-size:14px; color:#555;">
+                    <input type="checkbox" id="note-is-shared" ${note.is_shared ? 'checked' : ''}> Поделиться с друзьями
+                </label>
+            </div>` : ''}
+
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                ${!isFriendNote ? `<button id="save-note-btn" style="padding:8px 16px; background:#4CAF50; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:600;">Сохранить</button>` : ''}
+                <button id="close-note-popup" style="padding:8px 16px; background:#666; color:white; border:none; border-radius:4px; cursor:pointer;">Закрыть</button>
+            </div>
+        `;
+
+        document.body.appendChild(popup);
+
+        // Кнопка сохранения (только для своих)
+        const saveBtn = popup.querySelector('#save-note-btn');
+        if (saveBtn) {
+            saveBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.editNote(note, popup);
+            };
+        }
+
+        // Кнопка закрытия
+        popup.querySelector('#close-note-popup').onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            popup.remove();
+        };
+
+        // Блокируем всплытие кликов и клавиш, чтобы не триггерить читалку
+        popup.addEventListener('click', (e) => e.stopPropagation());
+        popup.querySelectorAll('input, textarea').forEach(el => {
+            el.addEventListener('keydown', (e) => e.stopPropagation());
+        });
+
+        // Закрытие по фону
+        setTimeout(() => {
+            const handler = (e) => {
+                if (!popup.contains(e.target)) {
+                    popup.remove();
+                    document.removeEventListener('click', handler);
+                }
+            };
+            document.addEventListener('click', handler);
+        }, 100);
     }
 
     
 
-    async editNote(note, popup) {
-        const newTitle = prompt("Измените название заметки:", note.title || '')
-        if (newTitle === null) return // пользователь отменил
+    async editNote(note, popup, is_shared) {
+        const newTitle = popup.querySelector('#edit-note-title').value.trim()
+        const newComment = popup.querySelector('#edit-note-comment').value.trim()
         
-        const newComment = prompt("Измените комментарий:", note.comment || '')
-        if (newComment === null) return // пользователь отменил
-        
+        const isShared = popup.querySelector('#note-is-shared').checked
         try {
             const response = await fetch(`http://localhost:3000/notes/${note.id}`, {
                 method: "PUT",
@@ -330,7 +365,8 @@ class Reader {
                 },
                 body: JSON.stringify({ 
                     title: newTitle,
-                    comment: newComment
+                    comment: newComment,
+                    is_shared: isShared
                 })
             })
             
@@ -354,9 +390,9 @@ class Reader {
             }
             
             // Показываем обновленный попап
-            setTimeout(() => this.showNotePopup(updatedNote), 100)
+            //setTimeout(() => this.showNotePopup(updatedNote), 100)
             
-            alert("✅ Заметка обновлена!")
+            this.showNotification("✅ Заметка обновлена!")
             
         } catch (error) {
             console.error("Ошибка редактирования заметки:", error)
@@ -410,6 +446,13 @@ class Reader {
                 >
             </div>
             
+            <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="bookmark-is-shared" style="cursor: pointer; width: 16px; height: 16px;">
+            <label for="bookmark-is-shared" style="font-size: 14px; color: #555; cursor: pointer; user-select: none;">
+                Поделиться с друзьями
+            </label>
+        </div>
+
             <div style="
                 display: flex;
                 justify-content: space-between;
@@ -447,6 +490,7 @@ class Reader {
         
         document.body.appendChild(popup)
         
+
         // Фокус на поле ввода
         setTimeout(() => {
             const input = popup.querySelector('#bookmark-title-input')
@@ -457,8 +501,9 @@ class Reader {
         // КНОПКА СОХРАНЕНИЯ
         popup.querySelector('#save-bookmark').addEventListener('click', () => {
             const newTitle = popup.querySelector('#bookmark-title-input').value.trim()
-            if (newTitle) {
-                this.editBookmark(bookmark.id, newTitle, popup)
+            const is_shared = popup.querySelector('#bookmark-is-shared').checked
+            if (newTitle || is_shared) {
+                this.editBookmark(bookmark.id, newTitle, popup, is_shared)
             } else {
                 alert('Название не может быть пустым')
             }
@@ -468,8 +513,9 @@ class Reader {
         popup.querySelector('#bookmark-title-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 const newTitle = popup.querySelector('#bookmark-title-input').value.trim()
-                if (newTitle) {
-                    this.editBookmark(bookmark.id, newTitle, popup)
+                const is_shared = popup.querySelector('#bookmark-is-shared').checked
+                if (newTitle || is_shared) {
+                    this.editBookmark(bookmark.id, newTitle, popup, is_shared)
                 }
             }
         })
@@ -504,15 +550,17 @@ class Reader {
         }, 100)
     }
 
-    async editBookmark(bookmarkId, newTitle, popup) {
+    async editBookmark(bookmarkId, newTitle, popup, is_shared) {
         try {
+            
             const response = await fetch(`http://localhost:3000/bookmarks/${bookmarkId}`, {
                 method: "PUT",
                 headers: { 
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ 
-                    title: newTitle.trim()
+                    title: newTitle.trim(),
+                    is_shared: is_shared
                 })
             })
             
@@ -529,6 +577,8 @@ class Reader {
             }
             
             // Показываем уведомление вместо alert
+            
+
             this.showNotification('✅ Закладка обновлена!', 'success')
             
         } catch (error) {
@@ -537,7 +587,44 @@ class Reader {
         }
     }
 
+    async loadSocialBookmarks() {
+        try {
+            const response = await fetch(`http://localhost:3000/social/bookmarks/${this.#bookId}`);
+            if (!response.ok) return;
+            
+            const bookmarks = await response.json();
+            this.renderSocialBookmarks(bookmarks);
+        } catch (e) {
+            console.error("Ошибка загрузки закладок друзей:", e);
+        }
+    }
 
+    renderSocialBookmarks(bookmarks) {
+        // Находим контейнер прогресс-бара (убедись, что ID совпадает с твоим HTML)
+        const container = document.getElementById('progress-slider');
+        if (!container) return;
+
+        // Удаляем старые социальные закладки, чтобы не дублировать
+        container.querySelectorAll('.social-bookmark-marker').forEach(m => m.remove());
+
+        bookmarks.forEach(bm => {
+            const marker = document.createElement('div');
+            marker.className = 'social-bookmark-marker';
+            marker.title = `${bm.username}: ${bm.title}`; // Подсказка при наведении
+            
+            // Позиционируем на полосе
+            marker.style.left = `${bm.position * 100}%`;
+            
+            // Клик для перехода к закладке друга
+            marker.onclick = (e) => {
+                e.stopPropagation();
+                console.log(`Переход к закладке друга ${bm.username}`);
+                this.view.goTo(bm.cfi);
+            };
+
+            container.appendChild(marker);
+        });
+}
     showNotification(message, type = 'info') {
         const stack = new Error().stack
         console.group('🔔 Notification called:')
@@ -853,6 +940,13 @@ showBookmarkCreationPopup() {
             >
         </div>
         
+        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="bookmark-is-shared" style="cursor: pointer; width: 16px; height: 16px;">
+            <label for="bookmark-is-shared" style="font-size: 14px; color: #555; cursor: pointer; user-select: none;">
+                Поделиться с друзьями
+            </label>
+        </div>
+
         <div style="
             display: flex;
             justify-content: flex-end;
@@ -938,9 +1032,11 @@ showBookmarkCreationPopup() {
         }
         isSaving = true
         
+
         console.log('🎯 Bookmark save button clicked (first time)')
         
         const title = popup.querySelector('#new-bookmark-title').value.trim()
+        const is_shared = popup.querySelector('#bookmark-is-shared').checked
         if (!title) {
             this.showNotification('Введите название закладки!', 'error')
             isSaving = false
@@ -959,7 +1055,8 @@ showBookmarkCreationPopup() {
                 body: JSON.stringify({ 
                     title, 
                     position: pos,
-                    cfi: cur_cfi 
+                    cfi: cur_cfi, 
+                    is_shared: is_shared
                 })
             })
             
@@ -1256,7 +1353,12 @@ showNoteCreationPopup(noteData) {
                 placeholder="Введите комментарий к заметке"
             ></textarea>
         </div>
-        
+        <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="note-is-shared" style="cursor: pointer; width: 16px; height: 16px;">
+            <label for="note-is-shared" style="font-size: 14px; color: #555; cursor: pointer; user-select: none;">
+                Поделиться с друзьями
+            </label>
+        </div>
         <div style="
             margin-bottom: 20px;
             padding: 15px;
@@ -1319,11 +1421,13 @@ showNoteCreationPopup(noteData) {
         input.select()
     }, 100)
     
+    
+
     // КНОПКА СОХРАНЕНИЯ
     popup.querySelector('#save-note').addEventListener('click', async () => {
         const title = popup.querySelector('#note-title-input').value.trim()
         const comment = popup.querySelector('#note-comment-input').value.trim()
-        
+        const is_shared = popup.querySelector('#note-is-shared').checked
         if (!title) {
             this.showNotification('Введите название заметки!', 'error')
             return
@@ -1342,7 +1446,8 @@ showNoteCreationPopup(noteData) {
                     selected_text: noteData.selected_text,
                     comment: comment,
                     cfi: noteData.cfi,
-                    color: 'yellow' 
+                    color: 'yellow',
+                    is_shared: is_shared
                 })
             })
             
@@ -1458,6 +1563,7 @@ getCurrentSelection() {
     return null
 }
 
+
 // Метод для получения CFI выделения
 getSelectionCFI() {
     const contents = this.view?.renderer?.getContents()
@@ -1566,6 +1672,7 @@ getSelectionCFI() {
                 <div class="note-preview">${n.selected_text || n.text?.substring(0, 50) || ''}...</div>
                 <div class="note-actions">
                     <button data-pos="${n.position}" data-id="${n.id}" data-cfi="${n.cfi || ''}" class="jump">Перейти</button>
+                    <button data-id="${n.id}" class="edit" title="Редактировать">✏️</button>
                     <button data-id="${n.id}" class="del">❌</button>
                 </div>
             `
@@ -1588,6 +1695,14 @@ getSelectionCFI() {
             }
             if (e.target.classList.contains("del")) {
                 this.deleteNote(e.target.dataset.id)
+            }
+            if (e.target.classList.contains("edit")) {
+                const noteId = e.target.dataset.id
+                // Находим закладку в массиве
+                const note = notes.find(n => n.id == noteId)
+                if (note) {
+                    this.showNotePopup(note)
+                }
             }
         })
 
@@ -1621,9 +1736,124 @@ getSelectionCFI() {
         await this.loadNotes()
     }
 
+    toggleSubTab(active, inactive) {
+        active.classList.add('active');
+        active.style.background = 'white';
+        inactive.classList.remove('active');
+        inactive.style.background = 'transparent';
+    }
 
+    initNotesSubTabs = () => {
+        const myBtn = document.getElementById('btn-my-notes');
+        const friendsBtn = document.getElementById('btn-friends-notes');
 
+        const setActive = (activeBtn, inactiveBtn) => {
+            activeBtn.style.background = 'white';
+            activeBtn.classList.add('active');
+            inactiveBtn.style.background = 'transparent';
+            inactiveBtn.classList.remove('active');
+        };
 
+        myBtn.onclick = async () => {
+            setActive(myBtn, friendsBtn);
+            // Вызываем загрузку твоих личных заметок
+            await this.loadNotes(); 
+        };
+
+        friendsBtn.onclick = async () => {
+            setActive(friendsBtn, myBtn);
+            // Вызываем загрузку заметок друзей
+            await this.loadFriendNotes(); 
+        };
+};
+
+    renderNotes(notes, isFriend = false) {
+    const list = document.getElementById('notes-list');
+    list.innerHTML = '';
+    
+    // Подсветка в тексте
+    if (isFriend) {
+        notes.forEach(note => {
+            this.view.addAnnotation({
+                value: 'friend-note:' + note.cfi,
+                color: 'rgba(0, 255, 0, 0.3)' 
+            });
+        });
+    }
+
+    notes.forEach(note => {
+        const item = document.createElement('div');
+        item.className = `note-item ${isFriend ? 'friend' : ''}`;
+        item.innerHTML = `
+            <div class="note-header">
+                <strong>${note.title || 'Заметка'}</strong>
+                ${isFriend ? `<span class="note-author">👤 ${note.username}</span>` : ''}
+            </div>
+            
+            <div class="note-text">
+                "${note.selected_text || note.text || ''}"
+            </div>
+
+            <div class="note-actions">
+                <button data-cfi="${note.cfi}" class="jump">Перейти</button>
+                
+                ${!isFriend ? `
+                    <button data-id="${note.id}" class="edit" title="Редактировать">✏️</button>
+                    <button data-id="${note.id}" class="del" title="Удалить">❌</button>
+                ` : ''}
+            </div>
+        `;
+
+        // Вешаем обработчики на кнопки внутри контейнера
+        item.addEventListener('click', (e) => {
+            const target = e.target;
+
+            // Логика кнопки "Перейти"
+            if (target.classList.contains('jump')) {
+                const cfi = target.getAttribute('data-cfi');
+                if (cfi) {
+                    this.view.goTo(cfi);
+                    // Опционально подсвечиваем попап при переходе
+                    this.showNotePopup(note);
+                }
+                return;
+            }
+
+            // Логика кнопки "Редактировать" (только для своих)
+            if (target.classList.contains('edit')) {
+                this.showNotePopup(note);
+                return;
+            }
+
+            // Логика кнопки "Удалить" (только для своих)
+            if (target.classList.contains('del')) {
+                if (confirm('Удалить заметку?')) {
+                    this.deleteNote(note.id); // Убедись, что этот метод у тебя есть
+                }
+                return;
+            }
+            
+            // Клик по самой карточке (не по кнопкам) тоже может вести к тексту
+            if (target === item || !target.closest('button')) {
+                this.view.goTo(note.cfi);
+            }
+        });
+
+        list.appendChild(item);
+    });
+}
+    async loadFriendNotes() {
+        try {
+            const response = await fetch(`http://localhost:3000/social/notes/${this.#bookId}`);
+            const notes = await response.json();
+            this.renderNotes(notes, true);
+            if (this.view && typeof this.view.loadFriendNotesForBook === 'function') {
+                await this.view.loadFriendNotesForBook(notes);
+            } // true — пометка, что это друзья
+        } catch (e) {
+            console.error("Ошибка загрузки заметок друзей:", e);
+        }
+    }
     #savePosition(reason) {
         if (!this.view?.lastLocation || !this.#bookId) return
         
@@ -1691,7 +1921,6 @@ getSelectionCFI() {
                         }
                     }
                 }, 1000)
-                this.renderFriendsNotes(this.#bookId, Overlayer);
             }
         })
         await this.view.open(file)
@@ -1788,7 +2017,10 @@ getSelectionCFI() {
         }
         this.loadSocialMarkers(this.#bookId);
         this.bookId = file.name; // Используем имя файла или ID из БД как ключ комнаты
-        
+        await this.loadSocialBookmarks();
+        await this.initBookmarkSubTabs();
+        this.loadFriendNotes();
+        await this.initNotesSubTabs();
         this.initPresence();
     }
     

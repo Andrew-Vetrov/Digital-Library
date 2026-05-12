@@ -8,6 +8,8 @@ const SEARCH_PREFIX = 'diglib-search:'
 
 const NOTE_PREFIX = 'diglib-note:'
 
+const FRIEND_NOTE_PREFIX = 'friend-note:';
+
 const isZip = async file => {
     const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer())
     return arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
@@ -198,6 +200,7 @@ export class View extends HTMLElement {
         this.hasAttribute('autohide-cursor'))
     #notesLoaded = false // Флаг, что заметки загружены
     #notesRendered = new Set() 
+    #friendNotes = new Map();
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -210,6 +213,18 @@ export class View extends HTMLElement {
     }
     
 
+    async loadFriendNotesForBook(notes) {
+        console.log('=== loadFriendNotesForBook ===');
+        if (!Array.isArray(notes)) return;
+
+        this.#friendNotes = new Map();
+        notes.forEach(note => {
+            this.#friendNotes.set(note.id, { ...note, isFriend: true });
+        });
+
+        // Вызываем перерисовку текущей страницы
+        this.renderNotesOnCurrentPage();
+    }
    async loadNotesForBook(bookId, notes) {  // параметр notes определен
         console.log('=== loadNotesForBook ===')
         console.log('Book ID:', bookId)
@@ -290,6 +305,23 @@ export class View extends HTMLElement {
                     }
                 }
             }
+            for (const [noteId, note] of this.#friendNotes) {
+                if (note.cfi) {
+                    try {
+                        const resolved = this.resolveCFI(note.cfi);
+                        if (resolved && resolved.index === index) {
+                            const range = resolved.anchor(doc);
+                            if (range) {
+                                // Используем префикс "fnote:", чтобы отличить при клике
+                                overlayer.add(`fnote:${noteId}`, range, Overlayer.highlight, {
+                                    color: '#00ff7f', // Зеленоватый цвет для друзей
+                                    opacity: 0.3
+                                });
+                            }
+                        }
+                    } catch (e) { console.error(e); }
+                }
+            }
             
             if (renderedOnPage > 0) {
                 this.#notesRendered.add(index)
@@ -345,17 +377,45 @@ export class View extends HTMLElement {
                 }
             }
         })
-        
-        doc.addEventListener('click', e => {
-            const [value, range] = overlayer.hitTest(e)
-            if (value && value.startsWith('note:')) {
-                const noteId = value.replace('note:', '')
-                const note = this.#notes.get(parseInt(noteId))
-                if (note) {
-                    this.#emit('show-note', { note, range, index })
+
+        this.#friendNotes.forEach(note => {
+            if (note.cfi) {
+                try {
+                    const resolved = this.resolveCFI(note.cfi)
+                    if (resolved && resolved.index === index) {
+                        const range = resolved.anchor(doc)
+                        overlayer.add(`note:${note.id}`, range, Overlayer.highlight, {
+                            color: note.color || 'yellow',
+                            opacity: 0.3
+                        })
+                    }
+                } catch (e) {
+                    console.error('Failed to render note:', e)
                 }
             }
-        }, false)
+        })
+        
+        doc.addEventListener('click', e => {
+            const [value, range] = overlayer.hitTest(e);
+            if (!value) return;
+
+            if (value.startsWith('note:')) {
+                // Твоя заметка
+                const noteId = parseInt(value.replace('note:', ''));
+                const note = this.#notes.get(noteId);
+                if (note) this.#emit('show-note', { note, range, index });
+            } 
+            else if (value.startsWith('fnote:')) {
+                // Заметка ДРУГА
+                const noteId = parseInt(value.replace('fnote:', ''));
+                const note = this.#friendNotes.get(noteId);
+                if (note) {
+                    // Кидаем то же событие, наш новый попап сам поймет, что это друг
+                    // так как в объекте note теперь есть поле username или isFriend
+                    this.#emit('show-note', { note, range, index });
+                }
+            }
+        }, false);
 
         this.#emit('create-overlay', { index })
         return overlayer
@@ -665,23 +725,35 @@ export class View extends HTMLElement {
         })
     }
     async addAnnotation(annotation, remove) {
-        const { value } = annotation
-        if (value.startsWith(SEARCH_PREFIX)) {
-            const cfi = value.replace(SEARCH_PREFIX, '')
-            const { index, anchor } = await this.resolveNavigation(cfi)
-            const obj = this.#getOverlayer(index)
-            if (obj) {
-                const { overlayer, doc } = obj
-                if (remove) {
-                    overlayer.remove(value)
-                    return
-                }
-                const range = doc ? anchor(doc) : anchor
-                overlayer.add(value, range, Overlayer.outline)
-            }
-            return
+        let { value } = annotation
+        
+        // 1. ОПРЕДЕЛЯЕМ ЧИСТЫЙ CFI
+        // Убираем все возможные префиксы, чтобы resolveNavigation не упал
+        let cfi = value
+        if (value.startsWith('note:')) {
+            // Если у тебя в мапе лежат объекты, где ID — это число, 
+            // а в value — "note:ID", то нужно достать CFI из мапы.
+            const noteId = value.replace('note:', '')
+            const note = this.#notes.get(parseInt(noteId)) || this.#friendNotes?.get(parseInt(noteId))
+            cfi = note ? note.cfi : value // если нашли заметку, берем её cfi
+        } else if (value.startsWith('diglib-note:')) {
+            cfi = value.replace('diglib-note:', '')
+        } else if (value.startsWith('friend-note:')) {
+            cfi = value.replace('friend-note:', '')
+        } else if (value.startsWith('diglib-search:')) {
+            cfi = value.replace('diglib-search:', '')
         }
-        const { index, anchor } = await this.resolveNavigation(value)
+
+        // 2. БЕЗОПАСНЫЙ ВЫЗОВ
+        const resolved = await this.resolveNavigation(cfi)
+        
+        // Если навигация не зарезолвилась (null), выходим, а не падаем
+        if (!resolved) {
+            console.warn('Не удалось найти позицию для:', cfi)
+            return null
+        }
+
+        const { index, anchor } = resolved
         const obj = this.#getOverlayer(index)
         if (obj) {
             const { overlayer, doc } = obj

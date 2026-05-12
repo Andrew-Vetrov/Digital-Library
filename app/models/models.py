@@ -108,16 +108,18 @@ class Bookmark(Base):
     position = Column(Float)
     cfi = Column(String(500), nullable=True)
     user_id = Column(Integer)
+    is_shared = Column(Boolean, default = False)
     book = relationship(
         "Book",
         back_populates = "bookmarked_by"
     )
-    def __init__(self, book_id, title, position, cfi, user_id):
+    def __init__(self, book_id, title, position, cfi, user_id, is_shared):
         self.book_id = book_id
         self.title = title
         self.position = position
         self.cfi = cfi
         self.user_id = user_id
+        self.is_shared = is_shared
 
 class Note(Base):
     __tablename__ = "notes"
@@ -129,11 +131,12 @@ class Note(Base):
     selected_text = Column(Text, nullable=True)  # Выделенный текст
     comment = Column(Text, nullable=True)
     user_id = Column(Integer)
+    is_shared = Column(Boolean, default = False)
     note = relationship(
         "Book",
         back_populates = "noted_by"
     )
-    def __init__(self, book_id, title, position, selected_text, cfi, comment, user_id):
+    def __init__(self, book_id, title, position, selected_text, cfi, comment, user_id, is_shared):
         self.book_id = book_id
         self.title = title
         self.poistion = position
@@ -141,6 +144,7 @@ class Note(Base):
         self.cfi = cfi
         self.comment = comment
         self.user_id = user_id
+        self.is_shared = is_shared
 
 
 class ReadingHistory(Base):

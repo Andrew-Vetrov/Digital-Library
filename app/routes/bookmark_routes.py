@@ -32,6 +32,7 @@ def get_bookmarks(book_id):
 def create_bookmark(book_id):
     data = request.json
 
+    is_shared = data.get("is_shared")
     #book_id = data.get("book_id")
     title = data.get("title")
     position = data.get("position")
@@ -39,13 +40,14 @@ def create_bookmark(book_id):
     print("\n\n\n",position,"\n\n\n",flush=True)
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
-    bm = BookmarkService.create_bookmark(book_id, title, position, cfi, session["user_id"])
+    bm = BookmarkService.create_bookmark(book_id, title, position, cfi, session["user_id"], is_shared=is_shared)
     print("Создал закладку",flush=True)
     return jsonify({
         "id": "",
         "title": "",
         "position": "",
-        "cfi": ""
+        "cfi": "",
+        "is_shared" : bm.is_shared
     }), 201
 
 @bookmark_bp.route("/bookmarks/<int:bookmark_id>", methods=["DELETE"])
@@ -64,7 +66,8 @@ def update_bookmark(bookmark_id):
     if title is None:
         return jsonify({"error": "No fields to update"}), 400
     
-    updated_bookmark = BookmarkService.update_bookmark(bookmark_id, title)
+    print("IS_SHARED = ", data.get("is_shared"), flush = True)
+    updated_bookmark = BookmarkService.update_bookmark(bookmark_id, title, is_shared=data.get("is_shared"))
     
     if not updated_bookmark:
         return jsonify({"error": "Bookmark not found"}), 404
@@ -73,4 +76,5 @@ def update_bookmark(bookmark_id):
         "id": updated_bookmark.id,
         "title": updated_bookmark.title,
         "position": updated_bookmark.position,
+        "is_shared" : updated_bookmark.is_shared
     })
