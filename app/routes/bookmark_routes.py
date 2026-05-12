@@ -14,6 +14,7 @@ def add_cors_headers(response):
 
 @bookmark_bp.route("/bookmarks/<int:book_id>", methods=["GET"])
 def get_bookmarks(book_id):
+    print(session, flush=True)
     bookmarks = BookmarkService.get_bookmarks(book_id, session["user_id"])
 
     return jsonify([

@@ -202,3 +202,16 @@ class BookRating(Base):
     book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
 
     __table_args__ = (UniqueConstraint('user_id', 'book_id', name='_user_book_rating_uc'),)
+
+class ReadingProgress(Base):
+    __tablename__ = "reading_progress"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
+    cfi = Column(String(500), nullable=True)
+    last_position = Column(Float)
+    def __init__(self, user_id, book_id, cfi, last_position):
+        self.user_id = user_id
+        self.book_id = book_id
+        self.cfi = cfi
+        self.last_position = last_position

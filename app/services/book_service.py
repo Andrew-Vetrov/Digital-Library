@@ -1,7 +1,7 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.models import Book, ReadingHistory, BookRating
+from models.models import Book, ReadingHistory, BookRating, ReadingProgress
 from datetime import datetime
 from db import get_connection
 from services.elasticsearch_service import index_book
@@ -113,21 +113,44 @@ class BookService:
             return q
         
     @staticmethod
-    def get_reading_position(book_id):
-        res = BookService.find_book_by_id(book_id)
-        print("\n\nLOC = " + res)
+    def get_reading_position(book_id, user_id):
+        with get_connection() as session:
+            progress = session.query(ReadingProgress).filter(
+                    ReadingProgress.user_id == user_id,
+                    ReadingProgress.book_id == book_id
+                ).first()
 
-        return res.last_position
+        return progress
     
     @staticmethod
-    def set_reading_position(book_id, new_position, cfi):
+    def set_reading_position(book_id, user_id, new_position, cfi):
         with get_connection() as session:
-            q = session.query(Book).filter(Book.id == book_id).first()
-            session.query(Book).filter(Book.id == book_id).update(
-                {Book.last_position: new_position, Book.cfi: cfi}, synchronize_session=False)
+
+            progress = (
+                session.query(ReadingProgress)
+                .filter(
+                    ReadingProgress.book_id == book_id,
+                    ReadingProgress.user_id == user_id
+                )
+                .first()
+            )
+
+            if progress:
+                progress.last_position = new_position
+                progress.cfi = cfi
+            else:
+                progress = ReadingProgress(
+                    user_id=user_id,
+                    book_id=book_id,
+                    cfi=cfi,
+                    last_position=new_position
+                )
+
+                session.add(progress)
+
             session.commit()
             return True
-    
+        
     @staticmethod
     def update_reading_history(user_id, book_id):
         """Обновить историю чтения пользователя"""
@@ -144,11 +167,30 @@ class BookService:
             if history:
                 # Обновляем существующую запись
                 history.last_read_at = datetime.utcnow()
-                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                progress = session.query(ReadingProgress).filter(ReadingProgress.book_id == book_id,
+                                                                 ReadingProgress.user_id == user_id).first().last_position
                 history.progress = progress
             else:
                 # Создаем новую запись
-                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                progress = (
+                session.query(ReadingProgress)
+                    .filter(
+                        ReadingProgress.book_id == book_id,
+                        ReadingProgress.user_id == user_id
+                    )
+                    .first()
+                )
+                if not progress:
+                    progress = ReadingProgress(
+                        user_id=user_id,
+                        book_id=book_id,
+                        cfi=0,
+                        last_position=0
+                    )
+
+                    session.add(progress)
+                progress = session.query(ReadingProgress).filter(ReadingProgress.book_id == book_id,
+                                                                 ReadingProgress.user_id == user_id).first().last_position
                 history = ReadingHistory(
                     user_id=user_id,
                     book_id=book_id,
@@ -172,6 +214,8 @@ class BookService:
             books_with_progress = []
             for history in recent:
                 book = history.book
+                book.last_position = history.progress
+                print(book.last_position, flush=True)
                 books_with_progress.append(book)
             
             return books_with_progress
