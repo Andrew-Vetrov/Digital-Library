@@ -228,9 +228,14 @@ def read_book(id):
 def reading_position(book_id):
     if request.method == 'GET':
         try:
-            book = BookService.find_book_by_id(book_id)
-            loc = book.last_position
-            cfi = book.cfi
+            #ReadingHistory
+            #book = BookService.find_book_by_id(book_id)
+            #loc = book.last_position
+            #cfi = book.cfi
+            progress = BookService.get_reading_position(book_id=book_id,
+                                                        user_id=session["user_id"])
+            loc = progress.last_position
+            cfi = progress.cfi
             return jsonify({
                 'loc': loc,
                 'cfi': cfi
@@ -251,7 +256,7 @@ def reading_position(book_id):
         try:
             loc = data['loc']
             cfi = data['cfi']
-            BookService.set_reading_position(book_id, loc, cfi)
+            BookService.set_reading_position(book_id, session["user_id"], loc, cfi)
             BookService.update_reading_history(session.get("user_id"), book_id)
             return jsonify({
                 'success': True,
