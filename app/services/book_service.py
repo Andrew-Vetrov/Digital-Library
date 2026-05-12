@@ -167,11 +167,30 @@ class BookService:
             if history:
                 # Обновляем существующую запись
                 history.last_read_at = datetime.utcnow()
-                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                progress = session.query(ReadingProgress).filter(ReadingProgress.book_id == book_id,
+                                                                 ReadingProgress.user_id == user_id).first().last_position
                 history.progress = progress
             else:
                 # Создаем новую запись
-                progress = session.query(Book).filter(Book.id == book_id).first().last_position
+                progress = (
+                session.query(ReadingProgress)
+                    .filter(
+                        ReadingProgress.book_id == book_id,
+                        ReadingProgress.user_id == user_id
+                    )
+                    .first()
+                )
+                if not progress:
+                    progress = ReadingProgress(
+                        user_id=user_id,
+                        book_id=book_id,
+                        cfi=0,
+                        last_position=0
+                    )
+
+                    session.add(progress)
+                progress = session.query(ReadingProgress).filter(ReadingProgress.book_id == book_id,
+                                                                 ReadingProgress.user_id == user_id).first().last_position
                 history = ReadingHistory(
                     user_id=user_id,
                     book_id=book_id,
@@ -195,6 +214,8 @@ class BookService:
             books_with_progress = []
             for history in recent:
                 book = history.book
+                book.last_position = history.progress
+                print(book.last_position, flush=True)
                 books_with_progress.append(book)
             
             return books_with_progress
