@@ -1767,6 +1767,25 @@ getSelectionCFI() {
         };
 };
 
+
+
+getFriendColor(username) {
+    if (!username) return 'rgba(0, 255, 0, 0.3)'; // Дефолтный зеленый, если имя пустое
+    
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    // Получаем базовые значения R, G, B через остаток от деления
+    // Ограничиваем диапазоны, чтобы цвета были ближе к пастельным и светлым
+    const r = 120 + Math.abs(hash % 115);         // от 120 до 235
+    const g = 140 + Math.abs((hash >> 8) % 95);   // от 140 до 235
+    const b = 160 + Math.abs((hash >> 16) % 75);  // от 160 до 235
+
+    // Возвращаем чистый rgba string с прозрачностью 0.35
+    return `rgba(${r}, ${g}, ${b}, 0.35)`;
+}
     renderNotes(notes, isFriend = false) {
     const list = document.getElementById('notes-list');
     list.innerHTML = '';
@@ -1774,13 +1793,16 @@ getSelectionCFI() {
     // Подсветка в тексте
     if (isFriend) {
         notes.forEach(note => {
+            const dynamicColor = this.getFriendColor(note.username);
+            console.log("dynamicColor =", dynamicColor);
             this.view.addAnnotation({
                 value: 'friend-note:' + note.cfi,
-                color: 'rgba(0, 255, 0, 0.3)' 
+                color: dynamicColor
             });
         });
     }
 
+    
     notes.forEach(note => {
         const item = document.createElement('div');
         item.className = `note-item ${isFriend ? 'friend' : ''}`;
@@ -1928,6 +1950,10 @@ getSelectionCFI() {
             const { note } = e.detail
             this.showNotePopup(note)
         })
+        this.view.addEventListener('show-notes-menu', (e) => {
+            const { notes, x, y } = e.detail;
+            this.showIntersectingNotesMenu(notes, x, y);
+        });
         this.view.addEventListener('load', this.#onLoad.bind(this))
         this.view.addEventListener('relocate', this.#onRelocate.bind(this))
 
@@ -2105,6 +2131,80 @@ getSelectionCFI() {
         });
     }
 
+    showIntersectingNotesMenu(notes, x, y) {
+        // Удаляем старое меню, если оно висит
+        const oldMenu = document.getElementById('intersecting-notes-menu');
+        if (oldMenu) oldMenu.remove();
+
+        const menu = document.createElement('div');
+        menu.id = 'intersecting-notes-menu';
+        menu.style.cssText = `
+            position: fixed;
+            left: ${x}px;
+            top: ${y}px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            max-width: 250px;
+            padding: 5px 0;
+        `;
+
+        // Заголовок меню
+        const header = document.createElement('div');
+        header.style.cssText = 'padding: 6px 12px; font-size: 11px; color: #999; border-bottom: 1px solid #eee;';
+        header.innerText = `Пересечение заметок (${notes.length})`;
+        menu.appendChild(header);
+
+        // Элементы списка
+        notes.forEach(note => {
+            const item = document.createElement('div');
+            item.style.cssText = `
+                padding: 8px 12px;
+                cursor: pointer;
+                font-size: 13px;
+                transition: background 0.2s;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            `;
+            
+            const author = note.isFriend ? `👤 ${note.username}` : '📝 Моя заметка';
+            const colorCircle = note.isFriend ? this.getFriendColor(note.username) : '#ffeb3b';
+
+            item.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 6px; font-weight: bold;">
+                    <span style="width: 8px; height: 8px; background: ${colorCircle}; border-radius: 50%; display: inline-block;"></span>
+                    <span>${note.title || 'Заметка'}</span>
+                </div>
+                <div style="font-size: 11px; color: #666;">${author}</div>
+            `;
+
+            item.onmouseenter = () => item.style.background = '#f5f5f5';
+            item.onmouseleave = () => item.style.background = 'transparent';
+            
+            // При клике на строку меню — открываем стандартный попап конкретной заметки
+            item.onclick = () => {
+                this.showNotePopup(note);
+                menu.remove();
+            };
+
+            menu.appendChild(item);
+        });
+
+        document.body.appendChild(menu);
+
+        // Закрываем менюшку, если кликнули мимо неё
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        // таймаут, чтобы клик открытия сразу её не закрыл
+        setTimeout(() => document.addEventListener('click', closeMenu), 100);
+    }
     renderPresence(users) {
         const others = Object.entries(users).filter(([id]) => id !== this.socket.id);
         this.updatePresenceDropdown(others);

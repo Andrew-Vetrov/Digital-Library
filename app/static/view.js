@@ -256,6 +256,22 @@ export class View extends HTMLElement {
 
         this.renderNotesOnCurrentPage()
     }
+    #getFriendColor(username) {
+        if (!username) return '#00ff7f'; // Дефолтный зеленый, если имени нет
+        
+        let hash = 0;
+        for (let i = 0; i < username.length; i++) {
+            hash = username.charCodeAt(i) + ((hash << 5) - hash);
+        }
+
+        // Генерируем пастельные светлые цвета (от 120 до 235), чтобы текст читался
+        const r = 120 + Math.abs(hash % 115);
+        const g = 140 + Math.abs((hash >> 8) % 95);
+        const b = 160 + Math.abs((hash >> 16) % 75);
+
+        // Возвращаем чистый rgb, а прозрачность пусть задает сам overlayer
+        return `rgb(${r}, ${g}, ${b})`;
+    }
 
     async renderNotesOnCurrentPage() {
         if (!this.#notesLoaded || this.#notes.size === 0) {
@@ -312,9 +328,10 @@ export class View extends HTMLElement {
                         if (resolved && resolved.index === index) {
                             const range = resolved.anchor(doc);
                             if (range) {
+                                const dynamicColor = this.#getFriendColor(note.username);
                                 // Используем префикс "fnote:", чтобы отличить при клике
                                 overlayer.add(`fnote:${noteId}`, range, Overlayer.highlight, {
-                                    color: '#00ff7f', // Зеленоватый цвет для друзей
+                                    color: dynamicColor, // Зеленоватый цвет для друзей
                                     opacity: 0.3
                                 });
                             }
@@ -354,6 +371,16 @@ export class View extends HTMLElement {
                     console.error('Ошибка отрисовки заметки', note.id, ':', e)
                 }
             }
+        }
+    }
+
+    #rangesIntersect(r1, r2) {
+        try {
+            // Проверяем, что начало одного не заходит за конец другого
+            return r1.compareBoundaryPoints(Range.END_TO_START, r2) < 0 &&
+                r1.compareBoundaryPoints(Range.START_TO_END, r2) > 0;
+        } catch (e) {
+            return false;
         }
     }
     // Добавляем заметки в overlayer когда он создается
@@ -396,24 +423,82 @@ export class View extends HTMLElement {
         })
         
         doc.addEventListener('click', e => {
-            const [value, range] = overlayer.hitTest(e);
-            if (!value) return;
+    // 1. Проверяем через hitTest, кликнули ли вообще хоть по какому-то выделению
+            const [hitValue, hitRange] = overlayer.hitTest(e);
+            if (!hitValue) return; // Мимо кассы, обычный текст
 
-            if (value.startsWith('note:')) {
-                // Твоя заметка
-                const noteId = parseInt(value.replace('note:', ''));
-                const note = this.#notes.get(noteId);
-                if (note) this.#emit('show-note', { note, range, index });
-            } 
-            else if (value.startsWith('fnote:')) {
-                // Заметка ДРУГА
-                const noteId = parseInt(value.replace('fnote:', ''));
-                const note = this.#friendNotes.get(noteId);
-                if (note) {
-                    // Кидаем то же событие, наш новый попап сам поймет, что это друг
-                    // так как в объекте note теперь есть поле username или isFriend
-                    this.#emit('show-note', { note, range, index });
+            // 2. Получаем точную точку (конкретный символ), куда пришелся клик мыши
+            let clickRange = null;
+            if (doc.caretRangeFromPoint) {
+                clickRange = doc.caretRangeFromPoint(e.clientX, e.clientY);
+            } else if (doc.caretPositionFromPoint) {
+                const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
+                if (pos) {
+                    clickRange = doc.createRange();
+                    clickRange.setStart(pos.offsetNode, pos.offset);
+                    clickRange.setEnd(pos.offsetNode, pos.offset);
                 }
+            }
+
+            // Точка для сравнения: приоритет у символа клика, в крайнем случае - сам рейндж
+            const targetPoint = clickRange || hitRange;
+            const intersectingNotes = [];
+
+            // Вспомогательная функция: проверяет, накрывает ли диапазон заметки точку клика
+            const isPointInNoteRange = (noteRange) => {
+                try {
+                    // Точка клика должна быть строго внутри границ заметки (>= старта и <= конца)
+                    return noteRange.compareBoundaryPoints(Range.START_TO_START, targetPoint) <= 0 &&
+                        noteRange.compareBoundaryPoints(Range.END_TO_END, targetPoint) >= 0;
+                } catch (err) {
+                    return false;
+                }
+            };
+
+            // Проверяем СВОИ заметки (обходим как Map)
+            if (this.#notes) {
+                for (const [noteId, note] of this.#notes) {
+                    if (!note.cfi) continue;
+                    const resolved = this.resolveCFI(note.cfi);
+                    if (resolved && resolved.index === index) {
+                        const r = resolved.anchor(doc);
+                        if (r && isPointInNoteRange(r)) {
+                            intersectingNotes.push({ ...note, isFriend: false });
+                        }
+                    }
+                }
+            }
+
+            // Проверяем заметки ДРУЗЕЙ (обходим как Map)
+            if (this.#friendNotes) {
+                for (const [noteId, note] of this.#friendNotes) {
+                    if (!note.cfi) continue;
+                    const resolved = this.resolveCFI(note.cfi);
+                    if (resolved && resolved.index === index) {
+                        const r = resolved.anchor(doc);
+                        if (r && isPointInNoteRange(r)) {
+                            intersectingNotes.push({ ...note, isFriend: true });
+                        }
+                    }
+                }
+            }
+
+            // 3. Высчитываем реальные координаты клика с учетом смещения iframe
+            const iframeRect = doc.defaultView?.frameElement?.getBoundingClientRect();
+            const screenX = e.clientX + (iframeRect ? iframeRect.left : 0);
+            const screenY = e.clientY + (iframeRect ? iframeRect.top : 0);
+
+            // 4. Распределяем логику
+            if (intersectingNotes.length > 1) {
+                // Если в ЭТОЙ ТОЧКЕ реально несколько заметок — выкатываем меню по точным экранным координатам
+                this.#emit('show-notes-menu', { 
+                    notes: intersectingNotes, 
+                    x: screenX, 
+                    y: screenY 
+                });
+            } else if (intersectingNotes.length === 1) {
+                // Если тут только одна заметка (даже если её хвост где-то там пересекается), открываем сразу её
+                this.#emit('show-note', { note: intersectingNotes[0], range: hitRange, index });
             }
         }, false);
 
