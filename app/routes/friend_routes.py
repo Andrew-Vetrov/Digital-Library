@@ -98,6 +98,20 @@ def friends_page():
                            incoming_requests=incoming_requests,
                            sent_requests=sent_requests)
 
+@friends_bp.route('/friends/<int:friend_id>')
+def friend_page(friend_id):
+
+    friend = UserService.get_user_by_id(friend_id)
+    friend_name = friend.username
+    friend_reading_progress = FriendService.get_reading_progress(friend_id)
+    current_user = UserService.get_user_by_id(session.get("user_id"))
+    return render_template(
+        "friend_page.html",
+        friend_name=friend_name,
+        friend_reading_progress=friend_reading_progress,
+        current_user=current_user
+    )
+
 @friends_bp.route('/friends/remove', methods=['POST'])
 def remove_friend():
     uid = session.get("user_id")

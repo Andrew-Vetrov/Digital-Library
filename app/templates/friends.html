@@ -132,8 +132,12 @@
                         {% for friend in friends %}
                         <div class="col-md-6" id="friend-row-{{ friend.id }}">
                             <div class="d-flex justify-content-between align-items-center p-3 friend-item bg-white">
-                                <div><span class="fw-bold">{{ friend.username }}</span></div>
-                                <button onclick="deleteFriend({{ friend.id }}, '{{ friend.username }}')" class="btn btn-link text-danger p-0">Удалить</button>
+                                <div>
+                                    <a href="/friends/{{ friend.id }}" class="fw-bold text-dark text-decoration-none friend-profile-link">
+                                        {{ friend.username }}
+                                    </a>
+                                </div>
+                                <button onclick="deleteFriend({{ friend.id }}, '{{ friend.username }}')" class="btn btn-link text-danger p-0 text-decoration-none">Удалить</button>
                             </div>
                         </div>
                         {% endfor %}

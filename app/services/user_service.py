@@ -1,6 +1,6 @@
 import psycopg2.extras
 from db import get_connection
-from models.models import User, Friendship
+from models.models import User, Friendship, ReadingProgress, Book
 
 class UserService:
     @staticmethod
@@ -210,3 +210,20 @@ class FriendService:
                 if user:
                     friends.append(user)
             return friends
+        
+    @staticmethod
+    def get_reading_progress(user_id):
+        with get_connection() as session:
+            results = session.query(ReadingProgress, Book)\
+            .join(Book, ReadingProgress.book_id == Book.id)\
+            .filter(ReadingProgress.user_id == user_id)\
+            .all()
+        
+        progress_list = []
+        for progress, book in results:
+            progress_list.append({
+                "book_title": book.title,
+                "cfi": progress.cfi,
+                "last_position": progress.last_position # Ожидаем float от 0.0 до 1.0
+            })
+        return progress_list
