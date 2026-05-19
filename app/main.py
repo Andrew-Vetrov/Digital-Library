@@ -6,6 +6,7 @@ from routes.bookmark_routes import bookmark_bp
 from routes.note_routes import note_bp
 from routes.achievement_routes import achievement_bp
 from routes.friend_routes import friends_bp
+from routes.serializer_routes import serialize_bp
 from services.favourites_service import FavoriteService
 from services.book_service import BookService
 from services.user_service import UserService
@@ -26,6 +27,7 @@ app.register_blueprint(bookmark_bp)
 app.register_blueprint(note_bp)
 app.register_blueprint(achievement_bp)
 app.register_blueprint(friends_bp)
+app.register_blueprint(serialize_bp)
 socketio = SocketIO(app)
 init_presence_events(socketio)
 
