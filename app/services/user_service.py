@@ -222,7 +222,9 @@ class FriendService:
         progress_list = []
         for progress, book in results:
             progress_list.append({
+                "book_id": book.id,
                 "book_title": book.title,
+                "book_author": book.author,
                 "cfi": progress.cfi,
                 "last_position": progress.last_position # Ожидаем float от 0.0 до 1.0
             })

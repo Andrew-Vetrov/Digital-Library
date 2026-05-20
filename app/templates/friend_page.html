@@ -48,37 +48,18 @@
 
                 <h5 class="mb-3 text-muted">📚 Прогресс чтения книг:</h5>
 
-                <div class="d-flex flex-column gap-3">
+                <div class="row">
                     {% if friend_reading_progress %}
                         {% for item in friend_reading_progress %}
-                            {% set percent = (item.last_position * 100)|round|int %}
-                            <div class="p-3 book-progress-item">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="fw-bold text-dark fs-5 text-truncate" style="max-width: 75%;">
-                                        {{ item.book_title }}
-                                    </span>
-                                    <span class="badge bg-primary fs-6">{{ percent }}%</span>
-                                </div>
-                                
-                                <div class="progress mb-3" style="height: 10px;">
-                                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                         role="progressbar" 
-                                         style="width: {{ percent }}%;" 
-                                         aria-valuenow="{{ percent }}" 
-                                         aria-valuemin="0" 
-                                         aria-valuemax="100">
-                                    </div>
-                                </div>
-
-                                <div class="d-flex justify-content-between align-items-center text-muted small">
-                                    <div>
-                                        {% if item.cfi %}
-                                        {% else %}
-                                            <span class="text-muted italic">Локация не сохранена</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
+                            <div class="col-md-3 mb-4">
+                            <div class="card p-2 text-center book-card border-0 shadow-sm">
+                                <img src="/cover/{{ item.book_id }}" class="book-cover" alt="">
+                                <h6 class="mt-2">{{ item.book_title }}</h6>
+                                <p class="text-muted" style="font-size: 12px;">{{ item.book_author }}</p>
+                                <a href="/reader/{{ item.book_id }}" class="btn btn-primary btn-sm mb-2">Читать</a>
+                                <span class="badge bg-secondary py-2">Прогресс: {{ (item.last_position*100)|round(2) }}%</span>
                             </div>
+                        </div>                          
                         {% endfor %}
                     {% else %}
                         <div class="text-center py-5">

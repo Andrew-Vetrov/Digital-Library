@@ -1,5 +1,6 @@
 from flask import Blueprint, request, session, jsonify, redirect, url_for, flash, render_template
 from services.user_service import UserService, FriendService
+from services.book_service import BookService
 from models.models import User, Bookmark, Note
 from db import get_connection
 
@@ -109,7 +110,7 @@ def friend_page(friend_id):
         "friend_page.html",
         friend_name=friend_name,
         friend_reading_progress=friend_reading_progress,
-        current_user=current_user
+        current_user=current_user,
     )
 
 @friends_bp.route('/friends/remove', methods=['POST'])
