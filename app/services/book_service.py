@@ -1,7 +1,7 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.models import Book, ReadingHistory, BookRating, ReadingProgress
+from models.models import Book, ReadingHistory, BookRating, ReadingProgress, BookAccess
 from datetime import datetime
 from db import get_connection
 from services.elasticsearch_service import index_book
@@ -248,3 +248,9 @@ class BookService:
                     return True
 
             return False
+
+    @staticmethod
+    def get_allowed_book_ids(user_id):
+        with get_connection() as session:
+            access_records = session.query(BookAccess).filter(BookAccess.user_id == user_id).all()
+            return [record.book_id for record in access_records]

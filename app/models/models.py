@@ -22,6 +22,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
+    role = Column(String(20), default="user")
     username = Column(String(64), nullable=False, unique=True)
     email = Column(String(64), nullable=False, unique=True)
     password_hash = Column(String(256), nullable=False)
@@ -46,6 +47,7 @@ class User(Base):
     )
 
     def __init__(self, username, email, password_hash):
+        self.role = "user"
         self.username = username
         self.email = email
         self.password_hash = password_hash
@@ -56,6 +58,7 @@ class Book(Base):
     __tablename__ = "books"
 
     id = Column(Integer, primary_key=True)
+    is_visible_to_all = Column(Boolean, default=False)
     title = Column(String(255), nullable=False)
     average_rating = Column(Float, default=0.0)
     ratings = relationship('BookRating', backref='book', lazy=True)
@@ -139,7 +142,7 @@ class Note(Base):
     def __init__(self, book_id, title, position, selected_text, cfi, comment, user_id, is_shared):
         self.book_id = book_id
         self.title = title
-        self.poistion = position
+        self.position = position
         self.selected_text = selected_text
         self.cfi = cfi
         self.comment = comment
@@ -219,3 +222,9 @@ class ReadingProgress(Base):
         self.book_id = book_id
         self.cfi = cfi
         self.last_position = last_position
+
+class BookAccess(Base):
+    __tablename__ = "book_access"
+    id = Column(Integer, primary_key=True)
+    book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)

@@ -4,7 +4,7 @@ from minio import Minio
 from services.book_service import BookService
 from minio.error import S3Error
 from datetime import timedelta
-from models.models import Book, BookRating
+from models.models import User, Book, BookRating, BookAccess
 from db import get_connection
 from services.elasticsearch_service import search_books, semantic_search, add_search_history, get_search_history
 import sys
@@ -54,6 +54,16 @@ minio_client.set_bucket_policy(BUCKET_NAME, policy)
 
 @file_bp.route("/upload_file", methods=["GET", "POST"])
 def upload_file():
+    uid = session.get("user_id")
+    if not uid:
+        return redirect(url_for("auth_bp.authorization"))
+
+    with get_connection() as db_session:
+        current_user = db_session.query(User).filter_by(id=uid).first()
+
+        if not current_user or current_user.role != "admin":
+            abort(403, description="Доступ запрещен. Только для администраторов.")
+
     if request.method == "GET":
         return render_template("upload_file.html")
 
@@ -89,6 +99,11 @@ def delete_book(book_id):
     if not user_authorized:
         abort(403, "Вы не авторизованы")
 
+    with get_connection() as db_session:
+        current_user = db_session.query(User).filter_by(id=uid).first()
+        if not current_user or current_user.role != "admin":
+            abort(403, description="Доступ запрещен. Только для администраторов.")
+
     BookService.delete_book(book_id)
     flash("Книга успешно удалена!", "success")
     return redirect(url_for("file.list_files"))
@@ -106,10 +121,21 @@ def list_files():
     user_id = session.get("user_id")
 
     user_ratings = {}
+
+    is_admin = False
+    allowed_book_ids = set()
+
     if user_id:
         with get_connection() as db_session:
             ratings = db_session.query(BookRating).filter_by(user_id=user_id).all()
             user_ratings = {r.book_id: r.score for r in ratings}
+
+            current_user = db_session.query(User).filter_by(id=user_id).first()
+            if current_user and current_user.role == "admin":
+                is_admin = True
+            else:
+                access_records = db_session.query(BookAccess.book_id).filter_by(user_id=user_id).all()
+                allowed_book_ids = {r.book_id for r in access_records}
 
     if user_id and query and query.strip():
         add_search_history(user_id, query.strip())
@@ -124,6 +150,9 @@ def list_files():
         books = BookService.find_books(book_ids)
     else:
         books = BookService.find_books()
+
+    if not is_admin:
+        books = [b for b in books if b.is_visible_to_all or b.id in allowed_book_ids]
 
     author = request.args.get("author")
     publisher = request.args.get("publisher")
@@ -152,15 +181,15 @@ def list_files():
             else:
                 book.cover_url = None
 
-        all_books_for_genres = BookService.find_books()
-        genres = sorted({b.genre for b in all_books_for_genres if b.genre})
+        genres = sorted({b.genre for b in books if b.genre})
 
         return render_template("files.html",
                                books=books,
                                genres=genres,
                                request=request,
                                current_sort=sort_by,
-                               current_order=order)
+                               current_order=order,
+                               is_admin=is_admin)
 
     except Exception as e:
         return render_template("upload_file.html", message=f"Ошибка: {e}")
@@ -283,3 +312,59 @@ def serve_cover(book_id):
             return "Нет обложки", 404
     data = minio_client.get_object("librarybucket", book.cover_key).read()
     return send_file(BytesIO(data), mimetype="image/jpeg")
+
+
+@file_bp.route("/manage_access/<int:book_id>", methods=["GET", "POST"])
+def manage_access(book_id):
+    uid = session.get("user_id")
+    if not uid:
+        return jsonify({"error": "Вы не авторизованы"}), 403
+
+    with get_connection() as db_session:
+        current_user = db_session.query(User).filter_by(id=uid).first()
+        if not current_user or current_user.role != "admin":
+            return jsonify({"error": "Доступ запрещен. Только для администраторов."}), 403
+
+        book = db_session.query(Book).filter_by(id=book_id).first()
+        if not book:
+            return jsonify({"error": "Книга не найдена"}), 404
+
+        if request.method == "GET":
+            access_records = db_session.query(BookAccess).filter_by(book_id=book_id).all()
+            allowed_user_ids = [record.user_id for record in access_records]
+
+            all_users = db_session.query(User).order_by(User.username).all()
+            users_list = [{"id": u.id, "username": u.username} for u in all_users]
+
+            return jsonify({
+                "book_id": book.id,
+                "title": book.title,
+                "is_visible_to_all": book.is_visible_to_all,
+                "allowed_user_ids": allowed_user_ids,
+                "all_users": users_list
+            })
+
+        elif request.method == "POST":
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "Отсутствуют данные запроса"}), 400
+
+            is_visible_to_all = data.get("is_visible_to_all", False)
+            user_ids = data.get("user_ids", [])
+
+            book.is_visible_to_all = is_visible_to_all
+
+            db_session.query(BookAccess).filter_by(book_id=book_id).delete()
+
+            if not is_visible_to_all:
+                for u_id in user_ids:
+                    user_exists = db_session.query(User).filter_by(id=u_id).first()
+                    if user_exists:
+                        new_access = BookAccess(book_id=book_id, user_id=u_id)
+                        db_session.add(new_access)
+
+            db_session.commit()
+            return jsonify({
+                "success": True,
+                "message": "Права доступа к книге успешно обновлены!"
+            })

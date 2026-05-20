@@ -33,25 +33,59 @@
       font-size: 0.8rem;
       color: #6c757d;
     }
+
+    .search-container { position: relative; }
+    #book-user-search-results {
+        max-height: 185px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        z-index: 1055;
+        position: absolute;
+        width: 100%;
+        top: 100%;
+        left: 0;
+        margin-top: 5px;
+        border: 1px solid #dee2e6;
+        background: white;
+    }
+    #book-user-search-results::-webkit-scrollbar { width: 6px; }
+    #book-user-search-results::-webkit-scrollbar-track { background: #f8f9fa; }
+    #book-user-search-results::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 4px; }
+    .allowed-user-item { transition: background 0.2s; border-radius: 8px; }
+    .allowed-user-item:hover { background-color: #f8f9fa; }
   </style>
 </head>
 <body class="p-4">
 
 <header class="bg-dark mb-4">
-  <div class="container-fluid d-flex p-2">
+  <div class="container-fluid d-flex p-2 justify-content-between align-items-center">
     <a href="/" class="btn btn-primary">На главную</a>
+    {% if is_admin %}
+      <a href="/upload_file" class="btn btn-success">➕ Загрузить книгу (Админ)</a>
+    {% endif %}
   </div>
 </header>
 
 <div class="container">
   <h2 class="mb-4 text-center">📚 Моя библиотека</h2>
 
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
   <div class="container mt-4">
     <form method="GET" action="/files" class="row g-3 p-3 mb-4 border rounded bg-light">
       <div class="col-md-4">
         <label class="form-label">Поиск по содержимому</label>
         <input type="text" name="q" class="form-control"
-               placeholder="Введите текст"
+               placeholder="Введите text"
                value="{{ request.args.get('q', '') }}">
       </div>
       <div class="col-md-2 d-flex align-items-end">
@@ -116,13 +150,17 @@
           </div>
 
           {% if session.authorized %}
-          <div class="d-flex justify-content-center gap-2 mb-3">
+          <div class="d-flex justify-content-center gap-2 mb-3 flex-wrap">
             <form action="/favorite/{{ book.id }}" method="POST">
               <button class="btn btn-warning btn-sm">В избранное ⭐</button>
             </form>
-            <form action="/delete/{{ book.id }}" method="POST">
-              <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
-            </form>
+
+            {% if is_admin %}
+              <button type="button" class="btn btn-outline-dark btn-sm" onclick="openAccessModal({{ book.id }})">Доступ 🔒</button>
+              <form action="/delete/{{ book.id }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите безвозвратно удалить эту книгу?');">
+                <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+              </form>
+            {% endif %}
           </div>
 
           <div class="mt-3 p-2 border-top">
@@ -147,11 +185,52 @@
   {% endif %}
 </div>
 
+{% if is_admin %}
+<div class="modal fade" id="accessModal" tabindex="-1" aria-labelledby="accessModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow-lg" style="border-radius: 15px;">
+      <div class="modal-header bg-dark text-white" style="border-top-left-radius: 14px; border-top-right-radius: 14px;">
+        <h5 class="modal-title" id="accessModalLabel">🔒 Настройка доступа к книге</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <input type="hidden" id="modal-book-id">
+        <p class="mb-3"><span class="text-muted small d-block">Редактируемая книга:</span> <strong id="modal-book-title" class="fs-5"></strong></p>
+
+        <div class="form-check form-switch p-3 bg-light rounded border mb-4">
+          <input class="form-check-input ms-0 me-2" type="checkbox" id="modal-visible-all" onchange="toggleUIState()">
+          <label class="form-check-label fw-bold" for="modal-visible-all">Доступна всем зарегистрированным пользователям</label>
+        </div>
+
+        <div id="modal-private-management-section">
+          <h6 class="fw-bold mb-2">➕ Предоставить доступ читателю</h6>
+          <div class="search-container mb-4">
+              <input type="text" id="book-user-search-input" class="form-control" placeholder="Введите ник пользователя..." autocomplete="off">
+              <div id="book-user-search-results" class="list-group shadow-sm" style="display: none;"></div>
+          </div>
+
+          <h6 class="fw-bold mb-2">👥 Читатели с персональным доступом</h6>
+          <div class="border rounded p-2 bg-white" style="max-height: 200px; overflow-y: auto;">
+              <div id="current-allowed-users-list" class="d-flex flex-column gap-1">
+                  </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary px-4" onclick="saveAccessSettings()">Сохранить изменения</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
 async function sendRating(bookId) {
     const scoreSelect = document.getElementById(`score-select-${bookId}`);
     const score = scoreSelect.value;
-
     const urlParams = new URLSearchParams(window.location.search);
     const isRatingSort = urlParams.get('sort') === 'rating';
 
@@ -161,22 +240,170 @@ async function sendRating(bookId) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ score: score })
         });
-
         if (response.ok) {
             const result = await response.json();
             if (result.success) {
-                if (isRatingSort) {
-                    window.location.reload();
-                } else {
+                if (isRatingSort) { window.location.reload(); }
+                else {
                     document.getElementById(`rating-val-${bookId}`).innerText = `⭐ ${result.new_rating} / 5`;
                     document.getElementById(`user-score-${bookId}`).innerHTML = `(Ваша оценка: <b>${result.user_score}</b>)`;
                 }
             }
         }
-    } catch (error) {
-        console.error("Ошибка сети или сервера:", error);
+    } catch (error) { console.error(error); }
+}
+
+{% if is_admin %}
+let bsAccessModal;
+let allUsersCache = [];
+let localAllowedUserIds = [];
+
+const currentAdminId = {{ session.get('user_id', 0) }};
+
+document.addEventListener("DOMContentLoaded", () => {
+    bsAccessModal = new bootstrap.Modal(document.getElementById('accessModal'));
+    const searchInput = document.getElementById('book-user-search-input');
+    const resultsContainer = document.getElementById('book-user-search-results');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim().toLowerCase();
+            if (query.length < 1) {
+                resultsContainer.style.display = 'none';
+                return;
+            }
+
+            const matches = allUsersCache.filter(u =>
+                u.username.toLowerCase().includes(query) &&
+                !localAllowedUserIds.includes(u.id) &&
+                u.id !== currentAdminId
+            );
+
+            resultsContainer.innerHTML = '';
+            if (matches.length === 0) {
+                resultsContainer.innerHTML = '<div class="list-group-item text-muted small">Никого не нашли</div>';
+            } else {
+                matches.forEach(user => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
+                    item.innerHTML = `
+                        <span class="small fw-bold">${user.username}</span>
+                        <button onclick="addLocalUser(${user.id})" class="btn btn-success btn-sm py-0 px-2" style="font-size:0.75rem;">+</button>
+                    `;
+                    resultsContainer.appendChild(item);
+                });
+            }
+            resultsContainer.style.display = 'block';
+        });
+    }
+
+    document.addEventListener('click', (e) => {
+        if (resultsContainer && !e.target.closest('.search-container')) {
+            resultsContainer.style.display = 'none';
+        }
+    });
+});
+
+async function openAccessModal(bookId) {
+    document.getElementById('modal-book-id').value = bookId;
+    document.getElementById('book-user-search-input').value = '';
+    document.getElementById('book-user-search-results').style.display = 'none';
+
+    const listContainer = document.getElementById('current-allowed-users-list');
+    listContainer.innerHTML = '<p class="text-muted text-center py-2 small">Загрузка...</p>';
+
+    try {
+        const response = await fetch(`/manage_access/${bookId}`);
+        if (!response.ok) throw new Error("Не удалось получить параметры");
+        const data = await response.json();
+
+        document.getElementById('modal-book-title').innerText = data.title;
+        document.getElementById('modal-visible-all').checked = data.is_visible_to_all;
+
+        allUsersCache = data.all_users || [];
+        localAllowedUserIds = data.allowed_user_ids || [];
+
+        renderLocalAllowedList();
+        toggleUIState();
+        bsAccessModal.show();
+    } catch (err) { alert("Ошибка: " + err.message); }
+}
+
+function renderLocalAllowedList() {
+    const listContainer = document.getElementById('current-allowed-users-list');
+    listContainer.innerHTML = '';
+
+    if (localAllowedUserIds.length === 0) {
+        listContainer.innerHTML = '<p class="text-muted text-center py-3 my-0 small bg-light rounded">Никому не выдан персональный доступ</p>';
+        return;
+    }
+
+    localAllowedUserIds.forEach(userId => {
+        const userObj = allUsersCache.find(u => u.id === userId);
+        if (userObj) {
+            const row = document.createElement('div');
+            row.className = 'd-flex justify-content-between align-items-center p-2 border-bottom allowed-user-item';
+            row.innerHTML = `
+                <span class="small fw-bold text-dark">👤 ${userObj.username}</span>
+                <button onclick="removeLocalUser(${userObj.id})" class="btn btn-link text-danger p-0 text-decoration-none small">Удалить</button>
+            `;
+            listContainer.appendChild(row);
+        }
+    });
+}
+
+function addLocalUser(userId) {
+    if (!localAllowedUserIds.includes(userId)) {
+        localAllowedUserIds.push(userId);
+    }
+    document.getElementById('book-user-search-input').value = '';
+    document.getElementById('book-user-search-results').style.display = 'none';
+    renderLocalAllowedList();
+}
+
+function removeLocalUser(userId) {
+    localAllowedUserIds = localAllowedUserIds.filter(id => id !== userId);
+    renderLocalAllowedList();
+}
+
+function toggleUIState() {
+    const isVisibleToAll = document.getElementById('modal-visible-all').checked;
+    const section = document.getElementById('modal-private-management-section');
+    const searchInput = document.getElementById('book-user-search-input');
+
+    if (isVisibleToAll) {
+        section.style.opacity = '0.35';
+        searchInput.disabled = true;
+    } else {
+        section.style.opacity = '1';
+        searchInput.disabled = false;
     }
 }
+
+async function saveAccessSettings() {
+    const bookId = document.getElementById('modal-book-id').value;
+    const isVisibleToAll = document.getElementById('modal-visible-all').checked;
+
+    try {
+        const response = await fetch(`/manage_access/${bookId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                is_visible_to_all: isVisibleToAll,
+                user_ids: isVisibleToAll ? [] : localAllowedUserIds
+            })
+        });
+
+        const result = await response.json();
+        if (response.ok && result.success) {
+            bsAccessModal.hide();
+            window.location.reload();
+        } else {
+            alert(result.error || "Не удалось сохранить права доступа");
+        }
+    } catch (err) { alert("Ошибка сети: " + err.message); }
+}
+{% endif %}
 </script>
 
 </body>
