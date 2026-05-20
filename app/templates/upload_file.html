@@ -24,13 +24,11 @@
         <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
             <!-- Форма загрузки файла -->
             <form action="/upload_file" method="POST" enctype="multipart/form-data" id="uploadForm" class="mb-0">
-                <div class="mb-0">
-                    <label for="file" class="btn btn-warning">
-                        <i class="bi bi-cloud-upload"></i> Загрузить файлы
-                    </label>
-                    <input type="file" class="form-control d-none" id="file" name="file" 
-                           multiple onchange="submitForm()">
+                <div class="mb-3">
+                    <label for="file" class="form-label">Выберите EPUB-файлы</label>
+                    <input type="file" class="form-control" id="file" name="file" accept=".epub" multiple required>
                 </div>
+                <button type="submit" class="btn btn-warning">Загрузить</button>
             </form>
 
             <!-- Кнопка "Посмотреть все файлы" -->

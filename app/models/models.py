@@ -46,6 +46,12 @@ class User(Base):
         cascade="all, delete-orphan"
     )
 
+    reading_progress = relationship(
+        "ReadingProgress",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
     def __init__(self, username, email, password_hash):
         self.role = "user"
         self.username = username
@@ -90,6 +96,12 @@ class Book(Base):
 
     reading_history = relationship(
         "ReadingHistory",
+        back_populates="book",
+        cascade="all, delete-orphan"
+    )
+
+    reading_progress = relationship(
+        "ReadingProgress",
         back_populates="book",
         cascade="all, delete-orphan"
     )
@@ -217,6 +229,8 @@ class ReadingProgress(Base):
     book_id = Column(Integer, ForeignKey('books.id'), nullable=False)
     cfi = Column(String(500), nullable=True)
     last_position = Column(Float)
+    user = relationship("User", back_populates="reading_progress")
+    book = relationship("Book", back_populates="reading_progress")
     def __init__(self, user_id, book_id, cfi, last_position):
         self.user_id = user_id
         self.book_id = book_id

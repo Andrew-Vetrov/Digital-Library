@@ -68,20 +68,36 @@ def upload_file():
         return render_template("upload_file.html")
 
     if request.method == "POST":
-        file = request.files.get("file")
+        files = request.files.getlist("file")
         genre = request.form.get("genre")
 
-        if not file or file.filename == "":
+        if not files or files[0].filename == "":
             return render_template("upload_file.html", message="Ошибка: файл не выбран")
 
-        if not file.filename.endswith(".epub"):
-            return render_template("upload_file.html", message="Ошибка: допустим только формат EPUB")
+        success_titles = []
+        error_messages = []
 
-        try:
-            title = BookService.upload_book(file, genre)
-            return render_template("upload_file.html", message=f"Книга '{title}' успешно загружена!")
-        except Exception as e:
-            return render_template("upload_file.html", message=f"Ошибка при загрузке: {e}")
+        for file in files:
+            if not file or file.filename == "":
+                continue
+            if not file.filename.lower().endswith(".epub"):
+                error_messages.append(f"Файл '{file.filename}' пропущен: допустим только формат EPUB")
+                continue
+
+            try:
+                title = BookService.upload_book(file, genre)
+                success_titles.append(title)
+            except Exception as e:
+                error_messages.append(f"Ошибка при загрузке '{file.filename}': {e}")
+
+        if success_titles and not error_messages:
+            msg = f"Успешно загружено {len(success_titles)} книг: " + ", ".join(success_titles)
+            return render_template("upload_file.html", message=msg)
+        elif success_titles and error_messages:
+            msg = f"Загружено {len(success_titles)} книг. Ошибки: {', '.join(error_messages)}"
+            return render_template("upload_file.html", message=msg, error_messages=error_messages)
+        else:
+            return render_template("upload_file.html", message="Не удалось загрузить ни одной книги", error_messages=error_messages)
 
 
 @file_bp.after_request
@@ -96,9 +112,12 @@ def add_cors_headers(response):
 @file_bp.route("/delete/<int:book_id>", methods=["POST"])
 def delete_book(book_id):
     user_authorized = session.get("authorized", 0)
+    
     if not user_authorized:
         abort(403, "Вы не авторизованы")
 
+    uid = session.get("user_id")
+    
     with get_connection() as db_session:
         current_user = db_session.query(User).filter_by(id=uid).first()
         if not current_user or current_user.role != "admin":
