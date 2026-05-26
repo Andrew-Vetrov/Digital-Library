@@ -82,6 +82,8 @@
                 {% endif %}
 
                 <a href="/friends" class="btn btn-info btn-sm">Друзья</a>
+                <button id="serialize-btn" class="btn btn-outline-warning btn-sm" onclick="downloadUserData()">Скачать данные</button>
+                <a href="/import-data" class="btn btn-outline-warning btn-sm">Импорт данных</a>
                 <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
             </div>
             {% endif %}
@@ -292,6 +294,29 @@
         } catch (err) { alert("Ошибка соединения: " + err.message); }
     }
     {% endif %}
+
+    async function downloadUserData() {
+        const btn = document.getElementById('serialize-btn');
+        btn.disabled = true;
+        btn.textContent = 'Загружаем…';
+        try {
+            const resp = await fetch('/serialize', { credentials: 'include' });
+            if (!resp.ok) { alert('Ошибка при получении данных'); return; }
+            const data = await resp.json();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `library_backup_${new Date().toISOString().slice(0,10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            alert('Ошибка: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Скачать данные';
+        }
+    }
     </script>
 </body>
 </html>
