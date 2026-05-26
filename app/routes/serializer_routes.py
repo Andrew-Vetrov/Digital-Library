@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from models.models import (
+    Book,
     Bookmark,
     BookRating,
     Favourite,
@@ -197,7 +200,7 @@ def serialize_user(
 
     return result
 
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, redirect, url_for, render_template
 from db import SessionLocal
  
 serialize_bp = Blueprint("serialize_bp", __name__)
@@ -239,5 +242,256 @@ def serialize():
         if "error" in data:
             return jsonify(data), 404
         return jsonify(data), 200
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Десериализация / импорт данных
+# ---------------------------------------------------------------------------
+
+_MAX_IMPORT_BYTES = 5 * 1024 * 1024  # 5 МБ
+
+
+def deserialize_user_data(
+    db: Session,
+    user_id: int,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Импортирует данные из JSON-снимка в аккаунт пользователя.
+    Книги, которых нет в БД, и уже существующие записи — пропускаются.
+    Возвращает статистику: сколько записей каждого типа импортировано / пропущено.
+    """
+    stats: dict[str, dict[str, int]] = {
+        k: {"imported": 0, "skipped": 0}
+        for k in ("favorites", "bookmarks", "notes", "ratings", "reading_progress", "search_history", "friendships")
+    }
+
+    def book_exists(book_id: object) -> bool:
+        if not isinstance(book_id, int):
+            return False
+        return db.get(Book, book_id) is not None
+
+    # --- Favorites ---
+    existing_favs = {
+        f.book_id
+        for f in db.query(Favourite).filter(Favourite.user_id == user_id).all()
+    }
+    for item in data.get("favorites", []):
+        book = item.get("book") if isinstance(item, dict) else None
+        book_id = book.get("id") if isinstance(book, dict) else None
+        if not book_exists(book_id) or book_id in existing_favs:
+            stats["favorites"]["skipped"] += 1
+            continue
+        db.add(Favourite(user_id=user_id, book_id=book_id))
+        existing_favs.add(book_id)
+        stats["favorites"]["imported"] += 1
+
+    # --- Bookmarks ---
+    existing_bms = {
+        (bm.book_id, bm.cfi)
+        for bm in db.query(Bookmark).filter(Bookmark.user_id == user_id).all()
+    }
+    for item in data.get("bookmarks", []):
+        if not isinstance(item, dict):
+            stats["bookmarks"]["skipped"] += 1
+            continue
+        book_id = item.get("book_id")
+        cfi = item.get("cfi") or ""
+        if not book_exists(book_id) or (book_id, cfi) in existing_bms:
+            stats["bookmarks"]["skipped"] += 1
+            continue
+        db.add(Bookmark(
+            book_id=book_id,
+            title=str(item.get("title") or "")[:255],
+            position=float(item.get("position") or 0.0),
+            cfi=cfi,
+            user_id=user_id,
+            is_shared=False,
+        ))
+        existing_bms.add((book_id, cfi))
+        stats["bookmarks"]["imported"] += 1
+
+    # --- Notes ---
+    existing_notes = {
+        (n.book_id, n.cfi)
+        for n in db.query(Note).filter(Note.user_id == user_id).all()
+    }
+    for item in data.get("notes", []):
+        if not isinstance(item, dict):
+            stats["notes"]["skipped"] += 1
+            continue
+        book_id = item.get("book_id")
+        cfi = item.get("cfi") or ""
+        if not book_exists(book_id) or (book_id, cfi) in existing_notes:
+            stats["notes"]["skipped"] += 1
+            continue
+        db.add(Note(
+            book_id=book_id,
+            title=str(item.get("title") or "")[:255],
+            position=float(item.get("position") or 0.0),
+            selected_text=item.get("selected_text"),
+            cfi=cfi,
+            comment=item.get("comment"),
+            user_id=user_id,
+            is_shared=False,
+        ))
+        existing_notes.add((book_id, cfi))
+        stats["notes"]["imported"] += 1
+
+    # --- Ratings ---
+    existing_ratings = {
+        r.book_id
+        for r in db.query(BookRating).filter(BookRating.user_id == user_id).all()
+    }
+    for item in data.get("ratings", []):
+        if not isinstance(item, dict):
+            stats["ratings"]["skipped"] += 1
+            continue
+        book_id = item.get("book_id")
+        score = item.get("score")
+        if not book_exists(book_id) or book_id in existing_ratings:
+            stats["ratings"]["skipped"] += 1
+            continue
+        if not isinstance(score, int) or not (1 <= score <= 5):
+            stats["ratings"]["skipped"] += 1
+            continue
+        db.add(BookRating(user_id=user_id, book_id=book_id, score=score))
+        existing_ratings.add(book_id)
+        stats["ratings"]["imported"] += 1
+
+    # --- Reading Progress ---
+    existing_progress = {
+        rp.book_id
+        for rp in db.query(ReadingProgress).filter(ReadingProgress.user_id == user_id).all()
+    }
+    for item in data.get("reading_progress", []):
+        if not isinstance(item, dict):
+            stats["reading_progress"]["skipped"] += 1
+            continue
+        book_id = item.get("book_id")
+        if not book_exists(book_id) or book_id in existing_progress:
+            stats["reading_progress"]["skipped"] += 1
+            continue
+        db.add(ReadingProgress(
+            user_id=user_id,
+            book_id=book_id,
+            cfi=item.get("cfi") or "",
+            last_position=float(item.get("last_position") or 0.0),
+        ))
+        existing_progress.add(book_id)
+        stats["reading_progress"]["imported"] += 1
+
+    # --- Search History ---
+    # Дедуплицируем по (query, created_at), чтобы одинаковые запросы
+    # в разное время (или без времени, но разные события) импортировались.
+    existing_search = {
+        (sh.query, sh.created_at.isoformat() if sh.created_at else None)
+        for sh in db.query(SearchHistory).filter(SearchHistory.user_id == user_id).all()
+    }
+    # В рамках одного JSON-файла тоже отслеживаем добавленное, чтобы не дублировать
+    seen_in_payload: set[tuple[str, str | None]] = set()
+    for item in data.get("search_history", []):
+        if not isinstance(item, dict):
+            stats["search_history"]["skipped"] += 1
+            continue
+        query = item.get("query")
+        if not query or not isinstance(query, str):
+            stats["search_history"]["skipped"] += 1
+            continue
+        created_at_str: str | None = item.get("created_at")
+        key = (query, created_at_str)
+        if key in existing_search or key in seen_in_payload:
+            stats["search_history"]["skipped"] += 1
+            continue
+        sh = SearchHistory(user_id=user_id, query=query)
+        if created_at_str:
+            try:
+                sh.created_at = datetime.fromisoformat(created_at_str)
+            except ValueError:
+                pass
+        db.add(sh)
+        seen_in_payload.add(key)
+        stats["search_history"]["imported"] += 1
+
+    # --- Friendships ---
+    # Для каждого друга из снимка кидаем запрос дружбы, если пользователь
+    # существует и связи между ними ещё нет.
+    existing_friend_ids = {
+        (fs.friend_id if fs.user_id == user_id else fs.user_id)
+        for fs in db.query(Friendship).filter(
+            (Friendship.user_id == user_id) | (Friendship.friend_id == user_id)
+        ).all()
+    }
+    for item in data.get("friendships", []):
+        if not isinstance(item, dict):
+            stats["friendships"]["skipped"] += 1
+            continue
+        other_id = item.get("other_user_id")
+        if not isinstance(other_id, int) or other_id == user_id:
+            stats["friendships"]["skipped"] += 1
+            continue
+        if db.get(User, other_id) is None:
+            stats["friendships"]["skipped"] += 1
+            continue
+        if other_id in existing_friend_ids:
+            stats["friendships"]["skipped"] += 1
+            continue
+        fs = Friendship()
+        fs.user_id = user_id
+        fs.friend_id = other_id
+        fs.status = "pending"
+        fs.created_at = datetime.utcnow()
+        db.add(fs)
+        existing_friend_ids.add(other_id)
+        stats["friendships"]["imported"] += 1
+
+    db.commit()
+    return stats
+
+
+@serialize_bp.route("/import-data", methods=["GET"])
+def import_data_page():
+    if not session.get("user_id"):
+        return redirect(url_for("auth.authorization"))
+    return render_template("import_data.html")
+
+
+@serialize_bp.route("/deserialize", methods=["POST", "OPTIONS"])
+def deserialize():
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if "file" in request.files:
+        f = request.files["file"]
+        if not f.filename.lower().endswith(".json"):
+            return jsonify({"error": "Поддерживаются только JSON файлы"}), 400
+        raw = f.read(_MAX_IMPORT_BYTES + 1)
+        if len(raw) > _MAX_IMPORT_BYTES:
+            return jsonify({"error": "Файл слишком большой (максимум 5 МБ)"}), 413
+        try:
+            payload = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            return jsonify({"error": "Невалидный JSON файл"}), 400
+    elif request.is_json:
+        payload = request.get_json(silent=True) or {}
+    else:
+        return jsonify({"error": "Загрузите JSON файл или отправьте JSON тело запроса"}), 400
+
+    if not isinstance(payload, dict):
+        return jsonify({"error": "JSON должен быть объектом"}), 400
+
+    db = SessionLocal()
+    try:
+        stats = deserialize_user_data(db, user_id, payload)
+        return jsonify({"success": True, "imported": stats}), 200
+    except Exception:
+        db.rollback()
+        return jsonify({"error": "Внутренняя ошибка при импорте данных"}), 500
     finally:
         db.close()
