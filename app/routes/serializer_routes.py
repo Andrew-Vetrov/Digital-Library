@@ -158,10 +158,6 @@ def serialize_user(
         return {"error": f"User with id={user_id} not found"}
 
     result: dict[str, Any] = {
-        # --- Базовые поля пользователя ---
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
         "has_read_book_achievement": user.has_read_book_achievement,
         "invite_token": user.invite_token,
 
