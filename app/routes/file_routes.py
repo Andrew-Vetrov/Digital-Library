@@ -10,6 +10,8 @@ from services.elasticsearch_service import search_books, semantic_search, add_se
 import sys
 import json
 from flask import after_this_request
+from io import BytesIO
+from werkzeug.datastructures import FileStorage
 
 file_bp = Blueprint("file", __name__)
 
@@ -68,37 +70,80 @@ def upload_file():
         return render_template("upload_file.html")
 
     if request.method == "POST":
-        files = request.files.getlist("file")
+        files = []
+
+        for f in request.files.getlist("file"):
+            if f and f.filename:
+                files.append({
+                    "filename": f.filename,
+                    "content": BytesIO(f.read()),
+                    "content_type": f.content_type
+                })
         genre = request.form.get("genre")
 
-        if not files or files[0].filename == "":
+        if not files or files[0]["filename"] == "":
             return render_template("upload_file.html", message="Ошибка: файл не выбран")
 
-        success_titles = []
-        error_messages = []
 
-        for file in files:
-            if not file or file.filename == "":
-                continue
-            if not file.filename.lower().endswith(".epub"):
-                error_messages.append(f"Файл '{file.filename}' пропущен: допустим только формат EPUB")
-                continue
+        def generate():
+            total = len(files)
+            yield json.dumps({"type": "start", "total": total}) + "\n"
 
-            try:
-                title = BookService.upload_book(file, genre)
-                success_titles.append(title)
-            except Exception as e:
-                error_messages.append(f"Ошибка при загрузке '{file.filename}': {e}")
+            success_count = 0
+            error_messages = []
 
-        if success_titles and not error_messages:
-            msg = f"Успешно загружено {len(success_titles)} книг: " + ", ".join(success_titles)
-            return render_template("upload_file.html", message=msg)
-        elif success_titles and error_messages:
-            msg = f"Загружено {len(success_titles)} книг. Ошибки: {', '.join(error_messages)}"
-            return render_template("upload_file.html", message=msg, error_messages=error_messages)
-        else:
-            return render_template("upload_file.html", message="Не удалось загрузить ни одной книги", error_messages=error_messages)
+            for idx, file in enumerate(files, start=1):
+                if not file or file["filename"] == "":
+                    continue
+                if not file["filename"].lower().endswith(".epub"):
+                    error_messages.append(f"Файл '{file['filename']}' пропущен: допустим только формат EPUB")
+                    yield json.dumps({
+                        "type": "progress",
+                        "current": idx,
+                        "total": total,
+                        "filename": file["filename"],
+                        "status": "error",
+                        "message": f"Файл '{file['filename']}' пропущен: допустим только формат EPUB"
+                    }) + "\n"
+                    continue
 
+                try:
+                    file["content"].seek(0)
+                    wrapped_file = FileStorage(
+                        stream=file["content"],
+                        filename=file["filename"],
+                        content_type=file["content_type"]
+                    )
+                    title = BookService.upload_book(wrapped_file, genre)
+                    success_count += 1
+                    yield json.dumps({
+                        "type": "progress",
+                        "current": idx,
+                        "total": total,
+                        "filename": file["filename"],
+                        "status": "success",
+                        "title": title,
+                        "message": f"Книга '{title}' загружена"
+                    }) + "\n"
+                except Exception as e:
+                    error_messages.append(f"Ошибка при загрузке '{file['filename']}': {e}")
+                    yield json.dumps({
+                        "type": "progress",
+                        "current": idx,
+                        "total": total,
+                        "filename": file["filename"],
+                        "status": "error",
+                        "message": str(e)
+                    }) + "\n"
+
+            yield json.dumps({
+                "type": "complete",
+                "success_count": success_count,
+                "error_count": len(error_messages),
+                "errors": error_messages
+            }) + "\n"
+
+        return Response(generate(), mimetype='application/x-ndjson')
 
 @file_bp.after_request
 def add_cors_headers(response):
