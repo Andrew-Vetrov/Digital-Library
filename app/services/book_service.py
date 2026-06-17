@@ -1,7 +1,10 @@
 import os
 from minio import Minio
 from utils.epub_parser import EPUBParser
-from models.models import Book, ReadingHistory, BookRating, ReadingProgress, BookAccess
+from models.models import (
+    Book, ReadingHistory, BookRating, ReadingProgress, BookAccess,
+    User, GroupMember, GroupBookAccess,
+)
 from datetime import datetime
 from db import get_connection
 from services.elasticsearch_service import index_book
@@ -251,6 +254,63 @@ class BookService:
 
     @staticmethod
     def get_allowed_book_ids(user_id):
+        """ID книг, к которым у пользователя есть явный доступ —
+        напрямую (BookAccess) либо через группу (GroupBookAccess).
+        Не включает книги с is_visible_to_all (вызывающий код проверяет его отдельно)."""
         with get_connection() as session:
-            access_records = session.query(BookAccess).filter(BookAccess.user_id == user_id).all()
-            return [record.book_id for record in access_records]
+            direct = session.query(BookAccess.book_id).filter(
+                BookAccess.user_id == user_id
+            ).all()
+
+            via_group = (
+                session.query(GroupBookAccess.book_id)
+                .join(GroupMember, GroupMember.group_id == GroupBookAccess.group_id)
+                .filter(GroupMember.user_id == user_id)
+                .all()
+            )
+
+            return list({r[0] for r in direct} | {r[0] for r in via_group})
+
+    @staticmethod
+    def get_accessible_book_ids(user_id, session=None):
+        """Полный набор ID книг, доступных пользователю для чтения.
+
+        Возвращает None, если пользователь — администратор (доступны все книги).
+        Иначе — set из публичных книг (is_visible_to_all) и явно выданных
+        (напрямую или через группу). Используется для фильтрации сериализации.
+
+        Можно передать существующую SQLAlchemy-сессию, чтобы не открывать новую.
+        """
+        own_session = session is None
+        session = session or get_connection()
+        try:
+            user = session.query(User).get(user_id)
+            if user and getattr(user, "role", None) == "admin":
+                return None  # доступ ко всему
+
+            public = session.query(Book.id).filter(Book.is_visible_to_all.is_(True)).all()
+
+            direct = session.query(BookAccess.book_id).filter(
+                BookAccess.user_id == user_id
+            ).all()
+
+            via_group = (
+                session.query(GroupBookAccess.book_id)
+                .join(GroupMember, GroupMember.group_id == GroupBookAccess.group_id)
+                .filter(GroupMember.user_id == user_id)
+                .all()
+            )
+
+            return (
+                {r[0] for r in public}
+                | {r[0] for r in direct}
+                | {r[0] for r in via_group}
+            )
+        finally:
+            if own_session:
+                session.close()
+
+    @staticmethod
+    def user_can_access_book(user_id, book_id, session=None):
+        accessible = BookService.get_accessible_book_ids(user_id, session=session)
+        return accessible is None or book_id in accessible

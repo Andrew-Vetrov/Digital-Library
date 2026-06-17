@@ -242,3 +242,65 @@ class BookAccess(Base):
     id = Column(Integer, primary_key=True)
     book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# Группы пользователей для управления доступом к книгам
+# ---------------------------------------------------------------------------
+
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    members = relationship(
+        "GroupMember",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+    book_access = relationship(
+        "GroupBookAccess",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    group = relationship("Group", back_populates="members")
+
+    __table_args__ = (UniqueConstraint("group_id", "user_id", name="_group_user_uc"),)
+
+
+class GroupBookAccess(Base):
+    __tablename__ = "group_book_access"
+
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+
+    group = relationship("Group", back_populates="book_access")
+
+    __table_args__ = (UniqueConstraint("group_id", "book_id", name="_group_book_uc"),)
+
+
+# ---------------------------------------------------------------------------
+# Ачивки: какие ачивки получил пользователь (каталог описан в коде)
+# ---------------------------------------------------------------------------
+
+class UserAchievement(Base):
+    __tablename__ = "user_achievements"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    code = Column(String(64), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "code", name="_user_achievement_uc"),)

@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 from services.bookmark_service import BookmarkService
+from services.achievement_service import AchievementService
 
 bookmark_bp = Blueprint("bookmark_bp", __name__)
 
@@ -41,6 +42,7 @@ def create_bookmark(book_id):
     #if not (book_id and title and position):
     #    return jsonify({"error": "Missing fields"}), 400
     bm = BookmarkService.create_bookmark(book_id, title, position, cfi, session["user_id"], is_shared=is_shared)
+    AchievementService.evaluate(session["user_id"])
     print("Создал закладку",flush=True)
     return jsonify({
         "id": "",

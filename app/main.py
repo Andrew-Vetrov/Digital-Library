@@ -7,9 +7,11 @@ from routes.note_routes import note_bp
 from routes.achievement_routes import achievement_bp
 from routes.friend_routes import friends_bp
 from routes.serializer_routes import serialize_bp
+from routes.group_routes import group_bp
 from services.favourites_service import FavoriteService
 from services.book_service import BookService
 from services.user_service import UserService
+from services.achievement_service import AchievementService
 from db import init_db, get_connection
 from config import Config
 from services.elasticsearch_service import create_index
@@ -28,6 +30,7 @@ app.register_blueprint(note_bp)
 app.register_blueprint(achievement_bp)
 app.register_blueprint(friends_bp)
 app.register_blueprint(serialize_bp)
+app.register_blueprint(group_bp)
 socketio = SocketIO(app)
 init_presence_events(socketio)
 
@@ -102,10 +105,15 @@ def index():
             d["recent_books"] = raw_recent
 
         d["has_read_book_achievement"] = UserService.has_read_book_achievement(user_id)
+        d["achievements"] = AchievementService.get_user_achievements(user_id)
 
     return render_template("index.html", **d)
 
 if __name__ == "__main__":
     init_db()
+    # Автосоздание стартового админа из .env (ADMIN_EMAIL / ADMIN_PASSWORD).
+    # Удобно при частом пересоздании базы — админ появляется сам.
+    _cfg = Config()
+    UserService.ensure_admin_account(_cfg.ADMIN_USERNAME, _cfg.ADMIN_EMAIL, _cfg.ADMIN_PASSWORD)
     create_index()
     socketio.run(app, host="0.0.0.0", debug=True,  port=3000, allow_unsafe_werkzeug=True)

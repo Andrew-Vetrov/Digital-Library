@@ -1,3 +1,5 @@
+import hashlib
+import sys
 import psycopg2.extras
 from db import get_connection
 from models.models import User, Friendship, ReadingProgress, Book
@@ -41,6 +43,39 @@ class UserService:
             newUser = User(username, email, password)
             session.add(newUser)
             session.commit()
+
+    @staticmethod
+    def ensure_admin_account(username, email, password_plain):
+        """Гарантирует наличие администратора с указанным email.
+
+        Идемпотентно: если пользователь с таким email уже есть — повышает его
+        до роли admin; иначе создаёт нового админа. Пароль хэшируется так же,
+        как при обычной регистрации (sha256). Возвращает id админа или None.
+        """
+        if not email or not password_plain:
+            return None
+
+        password_hash = hashlib.sha256(password_plain.encode()).hexdigest()
+
+        with get_connection() as session:
+            user = session.query(User).filter(User.email == email).first()
+            if user:
+                if user.role != "admin":
+                    user.role = "admin"
+                    session.commit()
+                    print(f"[admin] Пользователь {email} повышен до admin", file=sys.stderr)
+                return user.id
+
+            # username должен быть уникальным — если занят, добавляем суффикс по id позже
+            if session.query(User).filter(User.username == username).first():
+                username = f"{username}_admin"
+
+            admin = User(username, email, password_hash)
+            admin.role = "admin"
+            session.add(admin)
+            session.commit()
+            print(f"[admin] Создан администратор {email}", file=sys.stderr)
+            return admin.id
                 
     @staticmethod
     def has_read_book_achievement(user_id):

@@ -1,5 +1,6 @@
 from flask import Blueprint, redirect, session
 from services.favourites_service import FavoriteService
+from services.achievement_service import AchievementService
 
 favourite_bp = Blueprint("favourite", __name__)
 
@@ -20,6 +21,7 @@ def add_favorite(book_id):
     user_id = session["user_id"]
 
     FavoriteService.add_favorite(user_id, book_id)
+    AchievementService.evaluate(user_id)
 
     return redirect("/files")
 

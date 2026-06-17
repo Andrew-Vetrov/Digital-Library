@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <title>Управление группами — Digital Library</title>
+    <style>
+        body { background-color: #f9f9f9; }
+        .select-list {
+            max-height: 260px; overflow-y: auto;
+            border: 1px solid #dee2e6; border-radius: 8px; padding: 8px;
+            background: #fff;
+        }
+        .group-row { cursor: pointer; }
+        .group-row.active { background-color: #e8f0fe; }
+    </style>
+</head>
+<body class="p-4">
+    <header class="bg-dark py-2 rounded mb-4">
+        <div class="container-fluid d-flex gap-2">
+            <a href="/" class="btn btn-outline-light btn-sm">На главную</a>
+        </div>
+    </header>
+
+    <div class="container-fluid">
+        <h2 class="mb-4">👥 Управление группами</h2>
+        <div class="row">
+            <!-- Список групп -->
+            <div class="col-md-4">
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-primary text-white">Группы</div>
+                    <div class="card-body">
+                        <div class="input-group mb-3">
+                            <input type="text" id="new-group-name" class="form-control" placeholder="Название новой группы">
+                            <button class="btn btn-success" onclick="createGroup()">Создать</button>
+                        </div>
+                        <div id="groups-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Детали выбранной группы -->
+            <div class="col-md-8">
+                <div id="group-detail" class="card shadow-sm border-0 d-none">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                        <span id="detail-title">Группа</span>
+                        <button class="btn btn-danger btn-sm" onclick="deleteCurrentGroup()">Удалить группу</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <h6>Участники</h6>
+                                <div class="select-list" id="members-list"></div>
+                                <button class="btn btn-primary btn-sm mt-2" onclick="saveMembers()">Сохранить участников</button>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <h6>Доступные книги</h6>
+                                <div class="select-list" id="books-list"></div>
+                                <button class="btn btn-primary btn-sm mt-2" onclick="saveBooks()">Сохранить книги</button>
+                            </div>
+                        </div>
+                        <div id="detail-msg" class="mt-2"></div>
+                    </div>
+                </div>
+                <div id="no-selection" class="text-muted text-center mt-5">
+                    Выберите группу слева или создайте новую.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentGroupId = null;
+
+        async function loadGroups() {
+            const res = await fetch('/api/groups', { credentials: 'include' });
+            const data = await res.json();
+            const container = document.getElementById('groups-list');
+            if (!data.groups || data.groups.length === 0) {
+                container.innerHTML = '<p class="text-muted mb-0">Групп пока нет</p>';
+                return;
+            }
+            container.innerHTML = data.groups.map(g => `
+                <div class="d-flex justify-content-between align-items-center p-2 border-bottom group-row ${g.id === currentGroupId ? 'active' : ''}"
+                     onclick="openGroup(${g.id})">
+                    <span><strong>${escapeHtml(g.name)}</strong></span>
+                    <span class="badge bg-info">👤 ${g.member_count} · 📚 ${g.book_count}</span>
+                </div>
+            `).join('');
+        }
+
+        async function createGroup() {
+            const input = document.getElementById('new-group-name');
+            const name = input.value.trim();
+            if (!name) return;
+            const res = await fetch('/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name })
+            });
+            const data = await res.json();
+            if (!res.ok) { alert(data.error || 'Ошибка'); return; }
+            input.value = '';
+            await loadGroups();
+            openGroup(data.group_id);
+        }
+
+        async function openGroup(groupId) {
+            currentGroupId = groupId;
+            const res = await fetch(`/api/groups/${groupId}`, { credentials: 'include' });
+            if (!res.ok) { alert('Не удалось загрузить группу'); return; }
+            const g = await res.json();
+
+            document.getElementById('detail-title').textContent = 'Группа: ' + g.name;
+            document.getElementById('members-list').innerHTML = g.all_users.map(u => `
+                <div class="form-check">
+                    <input class="form-check-input member-cb" type="checkbox" value="${u.id}" id="m${u.id}" ${u.is_member ? 'checked' : ''}>
+                    <label class="form-check-label" for="m${u.id}">${escapeHtml(u.username)}</label>
+                </div>
+            `).join('') || '<p class="text-muted mb-0">Нет пользователей</p>';
+
+            document.getElementById('books-list').innerHTML = g.all_books.map(b => `
+                <div class="form-check">
+                    <input class="form-check-input book-cb" type="checkbox" value="${b.id}" id="b${b.id}" ${b.has_access ? 'checked' : ''}>
+                    <label class="form-check-label" for="b${b.id}">${escapeHtml(b.title)}</label>
+                </div>
+            `).join('') || '<p class="text-muted mb-0">Нет книг</p>';
+
+            document.getElementById('detail-msg').innerHTML = '';
+            document.getElementById('group-detail').classList.remove('d-none');
+            document.getElementById('no-selection').classList.add('d-none');
+            loadGroups();
+        }
+
+        async function saveMembers() {
+            const ids = [...document.querySelectorAll('.member-cb:checked')].map(cb => parseInt(cb.value));
+            await postIds(`/api/groups/${currentGroupId}/members`, { user_ids: ids }, 'Участники сохранены');
+            loadGroups();
+        }
+
+        async function saveBooks() {
+            const ids = [...document.querySelectorAll('.book-cb:checked')].map(cb => parseInt(cb.value));
+            await postIds(`/api/groups/${currentGroupId}/books`, { book_ids: ids }, 'Доступ к книгам сохранён');
+            loadGroups();
+        }
+
+        async function postIds(url, body, okMsg) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            const msg = document.getElementById('detail-msg');
+            if (res.ok) {
+                msg.innerHTML = `<div class="alert alert-success py-2">${okMsg}</div>`;
+            } else {
+                msg.innerHTML = `<div class="alert alert-danger py-2">${data.error || 'Ошибка'}</div>`;
+            }
+        }
+
+        async function deleteCurrentGroup() {
+            if (!confirm('Удалить группу? Доступ, выданный через неё, будет снят.')) return;
+            const res = await fetch(`/api/groups/${currentGroupId}`, { method: 'DELETE', credentials: 'include' });
+            if (res.ok) {
+                currentGroupId = null;
+                document.getElementById('group-detail').classList.add('d-none');
+                document.getElementById('no-selection').classList.remove('d-none');
+                loadGroups();
+            }
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        loadGroups();
+    </script>
+</body>
+</html>

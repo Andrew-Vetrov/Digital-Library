@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, session
 from services.note_service import NoteService
+from services.achievement_service import AchievementService
 
 note_bp = Blueprint("note_bp", __name__)
 
@@ -44,6 +45,7 @@ def create_note(book_id):
     #    return jsonify({"error": "Missing fields"}), 400
     bm = NoteService.create_note(book_id, title, position, selected_text, cfi, comment, session["user_id"],
                                  is_shared = data.get("is_shared"))
+    AchievementService.evaluate(session["user_id"])
     print("Создал заметку",flush=True)
     return jsonify({
         "id": bm.id,

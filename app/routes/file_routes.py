@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, Response, redirect, url_f
 import os
 from minio import Minio
 from services.book_service import BookService
+from services.achievement_service import AchievementService
 from minio.error import S3Error
 from datetime import timedelta
 from models.models import User, Book, BookRating, BookAccess
@@ -198,8 +199,7 @@ def list_files():
             if current_user and current_user.role == "admin":
                 is_admin = True
             else:
-                access_records = db_session.query(BookAccess.book_id).filter_by(user_id=user_id).all()
-                allowed_book_ids = {r.book_id for r in access_records}
+                allowed_book_ids = set(BookService.get_allowed_book_ids(user_id))
 
     if user_id and query and query.strip():
         add_search_history(user_id, query.strip())
@@ -274,6 +274,7 @@ def rate_book(book_id):
         success = BookService.set_book_rating(user_id, book_id, score)
 
         if success:
+            AchievementService.evaluate(user_id)
             book = BookService.find_book_by_id(book_id)
             return jsonify({
                 "success": True,

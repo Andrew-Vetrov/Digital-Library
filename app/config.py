@@ -14,6 +14,13 @@ class Config:
     DB_DRIVER = os.getenv("DB_DRIVER", "postgresql")
     DB_LIB = os.getenv("DB_LIB", "psycopg2")
 
+    # Стартовый администратор. Если заданы ADMIN_EMAIL и ADMIN_PASSWORD,
+    # при запуске приложения такой пользователь создаётся (или повышается
+    # до admin) автоматически — удобно при частом пересоздании базы.
+    ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+    ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
     @property
     def DATABASE_URL(self):
         #return f"dbname={self.DB_NAME} user={self.DB_USER} password={self.DB_PASSWORD} host={self.DB_HOST} port={self.DB_PORT}"

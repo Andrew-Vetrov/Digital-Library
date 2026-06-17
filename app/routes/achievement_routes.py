@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, session
+from flask import Blueprint, jsonify, session, render_template, redirect, url_for
 from services.achievement_service import AchievementService
 
 achievement_bp = Blueprint("achievement", __name__)
@@ -20,9 +20,31 @@ def book_read_achievement():
             "error": "unauthorized"
         }), 401
 
-    show_popup = AchievementService.give_read_book_achievement(user_id)
+    # Событие «дочитал книгу» гарантированно выдаёт ачивку за первую книгу,
+    # затем пересчитываем остальные (счётчики книг/заметок/оценок и т.д.).
+    newly = []
+    first = AchievementService.award(user_id, "first_book")
+    if first:
+        newly.append(first)
+    newly.extend(AchievementService.evaluate(user_id))
 
     return jsonify({
         "success": True,
-        "show_achievement": show_popup
+        "show_achievement": len(newly) > 0,
+        "new_achievements": newly,
     })
+
+
+@achievement_bp.route("/achievements", methods=["GET"])
+def achievements_page():
+    if not session.get("user_id"):
+        return redirect(url_for("auth.authorization"))
+    return render_template("achievements.html")
+
+
+@achievement_bp.route("/api/achievements", methods=["GET"])
+def achievements_json():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({"achievements": AchievementService.get_user_achievements(user_id)})

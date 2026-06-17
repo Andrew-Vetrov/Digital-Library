@@ -79,9 +79,11 @@
                 {% if current_user and current_user.role == 'admin' %}
                     <a href="/upload_file" class="btn btn-success btn-sm">Загрузить файл</a>
                     <button type="button" class="btn btn-danger btn-sm" onclick="openRoleModal()">👑 Управление ролями</button>
+                    <a href="/manage_groups" class="btn btn-danger btn-sm">👥 Группы</a>
                 {% endif %}
 
                 <a href="/friends" class="btn btn-info btn-sm">Друзья</a>
+                <a href="/achievements" class="btn btn-warning btn-sm">🏆 Достижения</a>
                 <button id="serialize-btn" class="btn btn-outline-warning btn-sm" onclick="downloadUserData()">Скачать данные</button>
                 <a href="/import-data" class="btn btn-outline-warning btn-sm">Импорт данных</a>
                 <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
@@ -129,16 +131,21 @@
         </div>
         {% endif %}
 
-        {% if has_read_book_achievement %}
-        <h3 class="mt-4">Ачивки</h3>
+        {% set earned = (achievements | selectattr('earned') | list) if achievements else [] %}
+        {% if earned %}
+        <h3 class="mt-4 mb-3">🏆 Достижения
+            <a href="/achievements" class="btn btn-outline-secondary btn-sm align-middle">Все</a>
+        </h3>
         <div class="row">
+            {% for a in earned %}
             <div class="col-md-3 mb-4">
                 <div class="card p-3 text-center border-0 shadow-sm">
-                    <div style="font-size: 48px;">🏆</div>
-                    <h6 class="mt-2">Книга прочитана</h6>
-                    <p class="text-muted" style="font-size: 12px;">Вы прочитали книгу до конца</p>
+                    <div style="font-size: 48px;">{{ a.emoji }}</div>
+                    <h6 class="mt-2">{{ a.title }}</h6>
+                    <p class="text-muted" style="font-size: 12px;">{{ a.description }}</p>
                 </div>
             </div>
+            {% endfor %}
         </div>
         {% endif %}
     </div>

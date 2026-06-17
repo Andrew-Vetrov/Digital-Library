@@ -18,6 +18,8 @@ from models.models import (
     SearchHistory,
     User,
 )
+from services.book_service import BookService
+from services.achievement_service import AchievementService
 
 
 # ---------------------------------------------------------------------------
@@ -157,32 +159,48 @@ def serialize_user(
     if user is None:
         return {"error": f"User with id={user_id} not found"}
 
+    # Набор книг, доступных пользователю по его правам (None = админ, доступно всё).
+    # Данные по книгам, к которым доступа нет, в выгрузку не попадают.
+    accessible = BookService.get_accessible_book_ids(user_id, session=session)
+
+    def can_access(book_id: object) -> bool:
+        return accessible is None or book_id in accessible
+
     result: dict[str, Any] = {
         "has_read_book_achievement": user.has_read_book_achievement,
         "invite_token": user.invite_token,
 
+        # --- Заработанные ачивки (информативно; при импорте пересчитываются) ---
+        "achievements": AchievementService.get_earned_codes(user_id, session=session),
+
         # --- Связи через relationship (загружаются автоматически) ---
-        "favorites": [_serialize_favourite(f) for f in user.favorites],
-        "reading_history": [_serialize_reading_history(rh) for rh in user.recent_books],
+        "favorites": [
+            _serialize_favourite(f) for f in user.favorites if can_access(f.book_id)
+        ],
+        "reading_history": [
+            _serialize_reading_history(rh) for rh in user.recent_books if can_access(rh.book_id)
+        ],
         "search_history": [_serialize_search_history(sh) for sh in user.search_history],
     }
 
     # --- Связи без FK-relationship на User (хранят user_id как Integer) ---
     if include_bookmarks:
         bookmarks = session.query(Bookmark).filter(Bookmark.user_id == user_id).all()
-        result["bookmarks"] = [_serialize_bookmark(bm) for bm in bookmarks]
+        result["bookmarks"] = [_serialize_bookmark(bm) for bm in bookmarks if can_access(bm.book_id)]
 
     if include_notes:
         notes = session.query(Note).filter(Note.user_id == user_id).all()
-        result["notes"] = [_serialize_note(n) for n in notes]
+        result["notes"] = [_serialize_note(n) for n in notes if can_access(n.book_id)]
 
     if include_ratings:
         ratings = session.query(BookRating).filter(BookRating.user_id == user_id).all()
-        result["ratings"] = [_serialize_rating(r) for r in ratings]
+        result["ratings"] = [_serialize_rating(r) for r in ratings if can_access(r.book_id)]
 
     if include_reading_progress:
         progress = session.query(ReadingProgress).filter(ReadingProgress.user_id == user_id).all()
-        result["reading_progress"] = [_serialize_reading_progress(rp) for rp in progress]
+        result["reading_progress"] = [
+            _serialize_reading_progress(rp) for rp in progress if can_access(rp.book_id)
+        ]
 
     if include_friendships:
         friendships = (
@@ -264,10 +282,17 @@ def deserialize_user_data(
         for k in ("favorites", "bookmarks", "notes", "ratings", "reading_progress", "search_history", "friendships")
     }
 
+    # Набор книг, доступных импортирующему пользователю (None = админ, доступно всё).
+    # Данные к книгам без доступа не импортируем — права важнее содержимого файла.
+    accessible = BookService.get_accessible_book_ids(user_id, session=db)
+
     def book_exists(book_id: object) -> bool:
+        """Книга существует И импортирующий пользователь имеет к ней доступ."""
         if not isinstance(book_id, int):
             return False
-        return db.get(Book, book_id) is not None
+        if db.get(Book, book_id) is None:
+            return False
+        return accessible is None or book_id in accessible
 
     # --- Favorites ---
     existing_favs = {
@@ -444,6 +469,12 @@ def deserialize_user_data(
         stats["friendships"]["imported"] += 1
 
     db.commit()
+
+    # Ачивки не копируем из файла, а пересчитываем по импортированным данным —
+    # так новый пользователь честно получает ачивки за свой перенесённый прогресс.
+    awarded = AchievementService.evaluate(user_id, session=db)
+    stats["achievements"] = {"imported": len(awarded), "skipped": 0}
+
     return stats
 
 

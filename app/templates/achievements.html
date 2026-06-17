@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <title>Достижения — Digital Library</title>
+    <style>
+        body { background-color: #f9f9f9; }
+        .ach-card { border-radius: 12px; transition: transform .2s; height: 100%; }
+        .ach-card:hover { transform: translateY(-3px); }
+        .ach-locked { opacity: .45; filter: grayscale(1); }
+        .ach-emoji { font-size: 44px; }
+    </style>
+</head>
+<body class="p-4">
+    <header class="bg-dark py-2 rounded mb-4">
+        <div class="container-fluid d-flex gap-2 align-items-center">
+            <a href="/" class="btn btn-outline-light btn-sm">На главную</a>
+            <span id="progress-badge" class="badge bg-warning text-dark ms-auto"></span>
+        </div>
+    </header>
+
+    <div class="container">
+        <h2 class="mb-4">🏆 Достижения</h2>
+        <div id="ach-grid" class="row g-3"></div>
+    </div>
+
+    <script>
+        async function loadAchievements() {
+            const res = await fetch('/api/achievements', { credentials: 'include' });
+            const data = await res.json();
+            const grid = document.getElementById('ach-grid');
+            const list = data.achievements || [];
+            const earned = list.filter(a => a.earned).length;
+
+            document.getElementById('progress-badge').textContent =
+                `Получено ${earned} из ${list.length}`;
+
+            grid.innerHTML = list.map(a => `
+                <div class="col-md-4 col-sm-6">
+                    <div class="card text-center p-3 shadow-sm border-0 ach-card ${a.earned ? '' : 'ach-locked'}">
+                        <div class="ach-emoji">${a.earned ? a.emoji : '🔒'}</div>
+                        <h6 class="mt-2">${escapeHtml(a.title)}</h6>
+                        <p class="text-muted mb-1" style="font-size:13px;">${escapeHtml(a.description)}</p>
+                        ${a.earned && a.earned_at
+                            ? `<small class="text-success">Получено: ${new Date(a.earned_at).toLocaleDateString()}</small>`
+                            : '<small class="text-muted">Не получено</small>'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(s) {
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
+        loadAchievements();
+    </script>
+</body>
+</html>
