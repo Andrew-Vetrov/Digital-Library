@@ -370,7 +370,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 let data = {};
                 try { data = await response.json(); } catch(jsonErr) {}
 
-                if (response.status === 403 || response.redirected) {
+                if (response.status === 403) {
                     deleteModal.hide();
                     showToast(data.error || "Вам запрещено удалять книги настройками группы", "danger");
                 } else if (!response.ok) {
