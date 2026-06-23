@@ -126,13 +126,13 @@ class UserService:
             if not user:
                 return {
                     "can_download_data": False, "can_import_data": False, "can_friends": False,
-                    "can_upload_files": False, "can_manage_groups": False
+                    "can_upload_files": False, "can_manage_groups": False, "can_manage_books_access": False
                 }
 
             if user.role == "admin":
                 return {
                     "can_download_data": True, "can_import_data": True, "can_friends": True,
-                    "can_upload_files": True, "can_manage_groups": True
+                    "can_upload_files": True, "can_manage_groups": True, "can_manage_books_access": True
                 }
 
             groups = session.query(Group).join(GroupMember, GroupMember.group_id == Group.id).filter(

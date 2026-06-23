@@ -80,6 +80,9 @@
 
                 {% if current_user and current_user.role == 'admin' %}
                     <button type="button" class="btn btn-danger btn-sm" onclick="openRoleModal()">👑 Управление ролями</button>
+                {% endif %}
+
+                {% if (current_user and current_user.role == 'admin') or can_manage_groups %}
                     <a href="/manage_groups" class="btn btn-danger btn-sm">👥 Группы</a>
                 {% endif %}
 
@@ -235,7 +238,8 @@
                 e.preventDefault();
                 try {
                     const response = await fetch('/import-data', { method: 'HEAD' });
-                    if (response.status === 403) {
+
+                    if (response.status === 403 || response.redirected) {
                         showToast("Вам запрещен импорт данных настройками группы", "danger");
                     } else if (!response.ok) {
                         showToast("Произошла ошибка при переходе", "danger");
@@ -369,7 +373,7 @@
             saveBtn.innerText = "Изменение роли заблокировано";
         } else {
             radioContainer.style.display = 'block';
-            adminWarning.style.display = 'none';
+            adminWarning.style.none = 'none';
 
             if (user.role === 'moderator') document.getElementById('roleRadioMod').checked = true;
             else document.getElementById('roleRadioUser').checked = true;

@@ -57,6 +57,15 @@
 </head>
 <body class="p-4">
 
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+  <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body" id="toast-text"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
+
 <header class="bg-dark mb-4">
   <div class="container-fluid d-flex p-2 justify-content-between align-items-center">
     <a href="/" class="btn btn-primary">На главную</a>
@@ -157,14 +166,13 @@
 
             {% if is_admin %}
               <button type="button" class="btn btn-outline-dark btn-sm" onclick="openAccessModal({{ book.id }})">Доступ 🔒</button>
-              <form action="/delete/{{ book.id }}" method="POST" onsubmit="return confirm('Вы уверены, что хотите безвозвратно удалить эту книгу?');">
-                <button
+
+              <button
                   type="button"
                   class="btn btn-danger btn-sm"
                   onclick="openDeleteModal({{ book.id }}, '{{ book.title|escape }}')">
                   Удалить
               </button>
-              </form>
             {% endif %}
           </div>
 
@@ -228,11 +236,48 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 18px;">
+
+      <div class="modal-header bg-danger text-white border-0">
+        <h5 class="modal-title">🗑 Удаление книги</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body text-center py-4">
+        <div style="font-size: 54px;">⚠️</div>
+        <h5 class="mt-3">Удалить книгу?</h5>
+        <p class="text-muted mt-2 mb-0">
+          Книга <strong id="deleteBookTitle"></strong> будет удалена безвозвратно.
+        </p>
+      </div>
+
+      <div class="modal-footer border-0 justify-content-center pb-4">
+        <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Отмена</button>
+        <form id="deleteForm" method="POST">
+          <button type="submit" class="btn btn-danger px-4">Да, удалить</button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
 {% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
+function showToast(message, type = 'success') {
+    const toastElement = document.getElementById('liveToast');
+    const toastText = document.getElementById('toast-text');
+    if (!toastElement || !toastText) return;
+    toastElement.className = `toast align-items-center text-white bg-${type} border-0`;
+    toastText.innerText = message;
+    new bootstrap.Toast(toastElement).show();
+}
+
 async function sendRating(bookId) {
     const scoreSelect = document.getElementById(`score-select-${bookId}`);
     const score = scoreSelect.value;
@@ -260,6 +305,7 @@ async function sendRating(bookId) {
 
 {% if is_admin %}
 let bsAccessModal;
+let deleteModal;
 let allUsersCache = [];
 let localAllowedUserIds = [];
 
@@ -267,6 +313,12 @@ const currentAdminId = {{ session.get('user_id', 0) }};
 
 document.addEventListener("DOMContentLoaded", () => {
     bsAccessModal = new bootstrap.Modal(document.getElementById('accessModal'));
+
+    const deleteModalElement = document.getElementById('deleteModal');
+    if (deleteModalElement) {
+        deleteModal = new bootstrap.Modal(deleteModalElement);
+    }
+
     const searchInput = document.getElementById('book-user-search-input');
     const resultsContainer = document.getElementById('book-user-search-results');
 
@@ -307,6 +359,33 @@ document.addEventListener("DOMContentLoaded", () => {
             resultsContainer.style.display = 'none';
         }
     });
+
+    const deleteForm = document.getElementById('deleteForm');
+    if (deleteForm) {
+        deleteForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const response = await fetch(deleteForm.action, { method: 'POST' });
+
+                let data = {};
+                try { data = await response.json(); } catch(jsonErr) {}
+
+                if (response.status === 403 || response.redirected) {
+                    deleteModal.hide();
+                    showToast(data.error || "Вам запрещено удалять книги настройками группы", "danger");
+                } else if (!response.ok) {
+                    deleteModal.hide();
+                    showToast(data.error || "Произошла ошибка при удалении книги", "danger");
+                } else {
+                    deleteModal.hide();
+                    window.location.reload();
+                }
+            } catch (err) {
+                deleteModal.hide();
+                showToast("Ошибка сети при удалении", "danger");
+            }
+        });
+    }
 });
 
 async function openAccessModal(bookId) {
@@ -319,7 +398,13 @@ async function openAccessModal(bookId) {
 
     try {
         const response = await fetch(`/manage_access/${bookId}`);
-        if (!response.ok) throw new Error("Не удалось получить параметры");
+
+        if (response.status === 403 || response.redirected) {
+            showToast("Вам запрещено управлять доступом к книгам настройками группы", "danger");
+            return;
+        }
+        if (!response.ok) throw new Error("Не удалось получить параметры доступа");
+
         const data = await response.json();
 
         document.getElementById('modal-book-title').innerText = data.title;
@@ -331,7 +416,9 @@ async function openAccessModal(bookId) {
         renderLocalAllowedList();
         toggleUIState();
         bsAccessModal.show();
-    } catch (err) { alert("Ошибка: " + err.message); }
+    } catch (err) {
+        showToast("Ошибка: " + err.message, "danger");
+    }
 }
 
 function renderLocalAllowedList() {
@@ -399,92 +486,29 @@ async function saveAccessSettings() {
             })
         });
 
-        const result = await response.json();
-        if (response.ok && result.success) {
+        let result = {};
+        try { result = await response.json(); } catch(e) {}
+
+        if (response.status === 403 || response.redirected) {
+            bsAccessModal.hide();
+            showToast(result.error || "Вам запрещено изменять права доступа настройками группы", "danger");
+        } else if (response.ok && result.success) {
             bsAccessModal.hide();
             window.location.reload();
         } else {
-            alert(result.error || "Не удалось сохранить права доступа");
+            showToast(result.error || "Не удалось сохранить права доступа", "danger");
         }
-    } catch (err) { alert("Ошибка сети: " + err.message); }
+    } catch (err) {
+        showToast("Ошибка сети: " + err.message, "danger");
+    }
 }
 
-let deleteModal;
-
-document.addEventListener("DOMContentLoaded", () => {
-    const deleteModalElement = document.getElementById('deleteModal');
-
-    if (deleteModalElement) {
-        deleteModal = new bootstrap.Modal(deleteModalElement);
-    }
-});
-
 function openDeleteModal(bookId, bookTitle) {
-
-    document.getElementById('deleteBookTitle').textContent =
-        `"${bookTitle}"`;
-
-    document.getElementById('deleteForm').action =
-        `/delete/${bookId}`;
-
+    document.getElementById('deleteBookTitle').textContent = `"${bookTitle}"`;
+    document.getElementById('deleteForm').action = `/delete/${bookId}`;
     deleteModal.show();
 }
 {% endif %}
-
 </script>
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg" style="border-radius: 18px;">
-
-      <div class="modal-header bg-danger text-white border-0">
-        <h5 class="modal-title">
-          🗑 Удаление книги
-        </h5>
-
-        <button
-          type="button"
-          class="btn-close btn-close-white"
-          data-bs-dismiss="modal">
-        </button>
-      </div>
-
-      <div class="modal-body text-center py-4">
-
-        <div style="font-size: 54px;">
-          ⚠️
-        </div>
-
-        <h5 class="mt-3">
-          Удалить книгу?
-        </h5>
-
-        <p class="text-muted mt-2 mb-0">
-          Книга
-          <strong id="deleteBookTitle"></strong>
-          будет удалена безвозвратно.
-        </p>
-
-      </div>
-
-      <div class="modal-footer border-0 justify-content-center pb-4">
-        <button
-          type="button"
-          class="btn btn-secondary px-4"
-          data-bs-dismiss="modal">
-          Отмена
-        </button>
-
-        <form id="deleteForm" method="POST">
-          <button
-            type="submit"
-            class="btn btn-danger px-4">
-            Да, удалить
-          </button>
-        </form>
-      </div>
-
-    </div>
-  </div>
-</div>
 </body>
 </html>

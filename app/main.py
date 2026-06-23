@@ -81,7 +81,8 @@ def index():
         "books": [],
         "favorites": [],
         "has_read_book_achievement": False,
-        "current_user": None
+        "current_user": None,
+        "can_manage_groups": False
     }
     if "authorized" in session:
         user_id = session.get("user_id")
@@ -109,6 +110,7 @@ def index():
 
         d["has_read_book_achievement"] = UserService.has_read_book_achievement(user_id)
         d["achievements"] = AchievementService.get_user_achievements(user_id)
+        d["can_manage_groups"] = UserService.get_user_permissions(user_id)["can_manage_groups"]
 
     return render_template("index.html", **d)
 

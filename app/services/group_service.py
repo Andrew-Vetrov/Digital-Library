@@ -71,6 +71,7 @@ class GroupService:
                 "deny_friends": getattr(group, "deny_friends", False),
                 "allow_upload_files": getattr(group, "allow_upload_files", False),
                 "allow_manage_groups": getattr(group, "allow_manage_groups", False),
+                "allow_manage_books_access": getattr(group, "allow_manage_books_access", False),
                 "member_ids": list(member_ids),
                 "book_ids": list(book_ids),
                 "all_users": [

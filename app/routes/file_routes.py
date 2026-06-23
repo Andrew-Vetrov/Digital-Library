@@ -63,7 +63,7 @@ def upload_file():
         return redirect(url_for("auth_bp.authorization"))
 
     perms = UserService.get_user_permissions(uid)
-    if not perms["can_upload_books"]:
+    if not perms["can_upload_files"]:
         abort(403, description="Загрузка книг запрещена настройками вашей группы.")
 
     if request.method == "GET":
@@ -164,8 +164,8 @@ def delete_book(book_id):
     uid = session.get("user_id")
     
     with get_connection() as db_session:
-        current_user = db_session.query(User).filter_by(id=uid).first()
-        if not current_user or current_user.role not in ["admin", "moderator"]:
+        perms = UserService.get_user_permissions(uid)
+        if not perms["can_manage_books_access"]:
             abort(403, description="Доступ запрещен. Только для администраторов.")
 
     BookService.delete_book(book_id)
@@ -194,8 +194,8 @@ def list_files():
             ratings = db_session.query(BookRating).filter_by(user_id=user_id).all()
             user_ratings = {r.book_id: r.score for r in ratings}
 
-            perms = UserService.get_user_permissions(uid)
-            if perms["can_upload_books"]:
+            perms = UserService.get_user_permissions(user_id)
+            if perms["can_upload_files"]:
                 is_admin = True
             else:
                 allowed_book_ids = set(BookService.get_allowed_book_ids(user_id))

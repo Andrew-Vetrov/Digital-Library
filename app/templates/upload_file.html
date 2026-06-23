@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="UTF-8">
@@ -14,15 +14,23 @@
 
 <body>
 
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+        <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toast-text"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <header class="bg-dark">
-        <div class="container-fluid d-flex">
-                <a href="/" class="btn btn-primary" >На главную</a>
+        <div class="container-fluid d-flex p-2">
+            <a href="/" class="btn btn-primary">На главную</a>
         </div>
     </header>
 
     <div class="container mt-4">
         <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
-            <!-- Форма загрузки файла -->
             <form action="/upload_file" method="POST" enctype="multipart/form-data" id="uploadForm" class="mb-0">
                 <div class="mb-3">
                     <label for="file" class="form-label">Выберите EPUB-файлы</label>
@@ -33,7 +41,6 @@
                 </button>
             </form>
 
-            <!-- Кнопка "Посмотреть все файлы" -->
             <a href="/files" class="btn btn-success">
                 <i class="bi bi-folder"></i> Посмотреть все файлы
             </a>
@@ -44,14 +51,13 @@
                 {{ message }}
             </div>
         {% endif %}
-    </div>
 
-    <div id="progressBlock" style="display: none;">
-            <div class="progress">
+        <div id="progressBlock" class="mb-4" style="display: none;">
+            <div class="progress mb-2">
                 <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
                      style="width: 0%">0%</div>
             </div>
-            <p id="progressText">Загружено 0 из 0 книг</p>
+            <p id="progressText" class="text-muted small">Загружено 0 из 0 книг</p>
         </div>
 
         <div id="messageArea" class="alert-area"></div>
@@ -65,12 +71,21 @@
         const progressText = document.getElementById('progressText');
         const messageArea = document.getElementById('messageArea');
 
+        function showToast(message, type = 'success') {
+            const toastElement = document.getElementById('liveToast');
+            const toastText = document.getElementById('toast-text');
+            if (!toastElement || !toastText) return;
+            toastElement.className = `toast align-items-center text-white bg-${type} border-0`;
+            toastText.innerText = message;
+            new bootstrap.Toast(toastElement).show();
+        }
+
         uploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Сброс сообщений
+            uploadBtn.disabled = true;
             messageArea.innerHTML = '';
-            // Показываем блок прогресса
+
             progressBlock.style.display = 'block';
             progressBar.style.width = '0%';
             progressBar.textContent = '0%';
@@ -83,6 +98,18 @@
                     method: 'POST',
                     body: formData
                 });
+
+                if (response.status === 403 || response.redirected) {
+                    let errorMsg = "Вам запрещено загружать файлы настройками группы";
+                    try {
+                        const data = await response.clone().json();
+                        if (data.error) errorMsg = data.error;
+                    } catch(jsonErr) {}
+
+                    showToast(errorMsg, "danger");
+                    progressBlock.style.display = 'none';
+                    return;
+                }
 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -99,7 +126,7 @@
 
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
-                    buffer = lines.pop(); // последняя часть может быть неполной
+                    buffer = lines.pop();
 
                     for (const line of lines) {
                         if (line.trim() === '') continue;
@@ -173,14 +200,13 @@
                 messageArea.innerHTML = '';
                 messageArea.appendChild(alertDiv);
             }
-            // Автоскролл к последнему сообщению
             alertDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     </script>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"
             integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p"
             crossorigin="anonymous"></script>
 
 </body>
-
 </html>

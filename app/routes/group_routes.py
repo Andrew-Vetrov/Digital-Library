@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, session, jsonify, redirec
 from services.group_service import GroupService
 from services.user_service import UserService
 from db import get_connection
-from models.models import GroupMember
+from models.models import GroupMember, Group
 
 group_bp = Blueprint("group_bp", __name__)
 
@@ -126,7 +126,6 @@ def group_permissions(group_id):
     data = request.get_json(silent=True) or {}
 
     with get_connection() as db_session:
-        from models.models import Group
         group = db_session.query(Group).get(group_id)
         if not group:
             return jsonify({"error": "Группа не найдена"}), 404
@@ -136,6 +135,7 @@ def group_permissions(group_id):
         group.deny_friends = bool(data.get("deny_friends"))
         group.allow_upload_files = bool(data.get("allow_upload_files"))
         group.allow_manage_groups = bool(data.get("allow_manage_groups"))
+        group.allow_manage_books_access = bool(data.get("allow_manage_books_access"))
 
         db_session.commit()
     return jsonify({"success": True})
