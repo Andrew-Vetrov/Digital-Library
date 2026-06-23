@@ -17,6 +17,11 @@ class GroupService:
                     "name": g.name,
                     "member_count": len(g.members),
                     "book_count": len(g.book_access),
+                    "deny_download_data": getattr(g, "deny_download_data", False),
+                    "deny_import_data": getattr(g, "deny_import_data", False),
+                    "deny_friends": getattr(g, "deny_friends", False),
+                    "allow_upload_files": getattr(g, "allow_upload_files", False),
+                    "allow_manage_groups": getattr(g, "allow_manage_groups", False),
                 })
             return result
 
@@ -61,6 +66,11 @@ class GroupService:
             return {
                 "id": group.id,
                 "name": group.name,
+                "deny_download_data": getattr(group, "deny_download_data", False),
+                "deny_import_data": getattr(group, "deny_import_data", False),
+                "deny_friends": getattr(group, "deny_friends", False),
+                "allow_upload_files": getattr(group, "allow_upload_files", False),
+                "allow_manage_groups": getattr(group, "allow_manage_groups", False),
                 "member_ids": list(member_ids),
                 "book_ids": list(book_ids),
                 "all_users": [

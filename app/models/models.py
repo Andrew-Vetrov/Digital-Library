@@ -255,6 +255,14 @@ class Group(Base):
     name = Column(String(120), nullable=False, unique=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    deny_download_data = Column(Boolean, default=False)
+    deny_import_data = Column(Boolean, default=False)
+    deny_friends = Column(Boolean, default=False)
+
+    allow_upload_files = Column(Boolean, default=False)
+    allow_manage_groups = Column(Boolean, default=False)
+    allow_manage_books_access = Column(Boolean, default=False)
+
     members = relationship(
         "GroupMember",
         back_populates="group",

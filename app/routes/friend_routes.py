@@ -12,16 +12,18 @@ def add_friend():
     current_user_id = session.get("user_id")
     if not current_user_id:
         return jsonify({"error": "Unauthorized"}), 401
-    
+
+    if not UserService.get_user_permissions(current_user_id)["can_friends"]:
+        return jsonify({"error": "Вам запрещено добавлять пользователей в друзья настройками группы"}), 403
+
     data = request.get_json()
     friend_username = data.get('username')
-    
+
     if not friend_username:
         return jsonify({"error": "Username is required"}), 400
-        
-    # Вызываем сервис, который мы написали ранее
+
     success = FriendService.send_friend_request(current_user_id, friend_username)
-    
+
     if success:
         return jsonify({"message": "Заявка отправлена!"}), 200
     else:
@@ -204,6 +206,9 @@ def add_friend_by_id():
     current_user_id = session.get("user_id")
     if not current_user_id:
         return jsonify({"error": "Unauthorized"}), 401
+
+    if not UserService.get_user_permissions(current_user_id)["can_friends"]:
+        return jsonify({"error": "Добавление в друзья ограничено"}), 403
 
     data = request.get_json()
     friend_id = data.get('friend_id')

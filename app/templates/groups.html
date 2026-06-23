@@ -61,7 +61,42 @@
                                 <button class="btn btn-primary btn-sm mt-2" onclick="saveBooks()">Сохранить книги</button>
                             </div>
                         </div>
-                        <div id="detail-msg" class="mt-2"></div>
+
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <h6>Функциональные права и ограничения группы</h6>
+                                <div class="card p-3 bg-light border-0 mb-2">
+                                    <div class="fw-bold small text-muted text-uppercase mb-2" style="font-size: 11px;">Ограничения для участников (Запреты):</div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input text-danger" type="checkbox" id="perm-deny-download">
+                                        <label class="form-check-label fw-bold text-danger" for="perm-deny-download">🚫 Запретить скачивание данных</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input text-danger" type="checkbox" id="perm-deny-import">
+                                        <label class="form-check-label fw-bold text-danger" for="perm-deny-import">🚫 Запретить импорт данных</label>
+                                    </div>
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input text-danger" type="checkbox" id="perm-deny-friends">
+                                        <label class="form-check-label fw-bold text-danger" for="perm-deny-friends">🚫 Запретить приглашение в друзья</label>
+                                    </div>
+
+                                    <hr class="my-2">
+
+                                    <div class="fw-bold small text-muted text-uppercase mb-2" style="font-size: 11px;">Привилегии участников (Допуск):</div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input text-success" type="checkbox" id="perm-allow-upload">
+                                        <label class="form-check-label fw-bold text-success" for="perm-allow-upload">📤 Разрешить загрузку файлов</label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input text-success" type="checkbox" id="perm-allow-manage">
+                                        <label class="form-check-label fw-bold text-success" for="perm-allow-manage">⚙️ Разрешить управление группами</label>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary btn-sm" onclick="savePermissions()">Сохранить права группы</button>
+                            </div>
+                        </div>
+
+                        <div id="detail-msg" class="mt-3"></div>
                     </div>
                 </div>
                 <div id="no-selection" class="text-muted text-center mt-5">
@@ -129,6 +164,12 @@
                 </div>
             `).join('') || '<p class="text-muted mb-0">Нет книг</p>';
 
+            document.getElementById('perm-deny-download').checked = !!g.deny_download_data;
+            document.getElementById('perm-deny-import').checked = !!g.deny_import_data;
+            document.getElementById('perm-deny-friends').checked = !!g.deny_friends;
+            document.getElementById('perm-allow-upload').checked = !!g.allow_upload_files;
+            document.getElementById('perm-allow-manage').checked = !!g.allow_manage_groups;
+
             document.getElementById('detail-msg').innerHTML = '';
             document.getElementById('group-detail').classList.remove('d-none');
             document.getElementById('no-selection').classList.add('d-none');
@@ -144,6 +185,18 @@
         async function saveBooks() {
             const ids = [...document.querySelectorAll('.book-cb:checked')].map(cb => parseInt(cb.value));
             await postIds(`/api/groups/${currentGroupId}/books`, { book_ids: ids }, 'Доступ к книгам сохранён');
+            loadGroups();
+        }
+
+        async function savePermissions() {
+            const payload = {
+                deny_download_data: document.getElementById('perm-deny-download').checked,
+                deny_import_data: document.getElementById('perm-deny-import').checked,
+                deny_friends: document.getElementById('perm-deny-friends').checked,
+                allow_upload_files: document.getElementById('perm-allow-upload').checked,
+                allow_manage_groups: document.getElementById('perm-allow-manage').checked
+            };
+            await postIds(`/api/groups/${currentGroupId}/permissions`, payload, 'Права и ограничения группы успешно обновлены');
             loadGroups();
         }
 

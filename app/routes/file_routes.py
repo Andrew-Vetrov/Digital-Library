@@ -3,6 +3,7 @@ import os
 from minio import Minio
 from services.book_service import BookService
 from services.achievement_service import AchievementService
+from services.user_service import UserService
 from minio.error import S3Error
 from datetime import timedelta
 from models.models import User, Book, BookRating, BookAccess
@@ -61,11 +62,9 @@ def upload_file():
     if not uid:
         return redirect(url_for("auth_bp.authorization"))
 
-    with get_connection() as db_session:
-        current_user = db_session.query(User).filter_by(id=uid).first()
-
-        if not current_user or current_user.role not in ["admin", "moderator"]:
-            abort(403, description="Доступ запрещен. Только для администраторов.")
+    perms = UserService.get_user_permissions(uid)
+    if not perms["can_upload_books"]:
+        abort(403, description="Загрузка книг запрещена настройками вашей группы.")
 
     if request.method == "GET":
         return render_template("upload_file.html")
@@ -195,8 +194,8 @@ def list_files():
             ratings = db_session.query(BookRating).filter_by(user_id=user_id).all()
             user_ratings = {r.book_id: r.score for r in ratings}
 
-            current_user = db_session.query(User).filter_by(id=user_id).first()
-            if current_user and current_user.role in ["admin", "moderator"]:
+            perms = UserService.get_user_permissions(uid)
+            if perms["can_upload_books"]:
                 is_admin = True
             else:
                 allowed_book_ids = set(BookService.get_allowed_book_ids(user_id))
@@ -285,6 +284,7 @@ def rate_book(book_id):
         return jsonify({"error": str(e)}), 500
 
     return jsonify({"success": False}), 400
+
 
 @file_bp.route("/search_history", methods=["GET"])
 def query_list():
@@ -385,11 +385,11 @@ def manage_access(book_id):
     if not uid:
         return jsonify({"error": "Вы не авторизованы"}), 403
 
-    with get_connection() as db_session:
-        current_user = db_session.query(User).filter_by(id=uid).first()
-        if not current_user or current_user.role not in ["admin", "moderator"]:
-            return jsonify({"error": "Доступ запрещен. Только для администраторов."}), 403
+    perms = UserService.get_user_permissions(uid)
+    if not perms["can_manage_books_access"]:
+        return jsonify({"error": "Управление правами доступа ограничено настройками вашей группы"}), 403
 
+    with get_connection() as db_session:
         book = db_session.query(Book).filter_by(id=book_id).first()
         if not book:
             return jsonify({"error": "Книга не найдена"}), 404

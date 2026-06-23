@@ -20,6 +20,7 @@ from models.models import (
 )
 from services.book_service import BookService
 from services.achievement_service import AchievementService
+from services.user_service import UserService
 
 
 # ---------------------------------------------------------------------------
@@ -237,8 +238,11 @@ def serialize():
     user_id = session.get("user_id")
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
- 
-    # Опциональные флаги через query-параметры: /serialize?include_notes=false
+
+    perms = UserService.get_user_permissions(user_id)
+    if not perms["can_download_data"]:
+        return jsonify({"error": "Скачивание данных запрещено настройками вашей группы"}), 403
+
     def flag(name: str) -> bool:
         return request.args.get(name, "true").lower() != "false"
  
@@ -480,8 +484,14 @@ def deserialize_user_data(
 
 @serialize_bp.route("/import-data", methods=["GET"])
 def import_data_page():
-    if not session.get("user_id"):
+    user_id = session.get("user_id")
+    if not user_id:
         return redirect(url_for("auth.authorization"))
+
+    perms = UserService.get_user_permissions(user_id)
+    if not perms["can_import_data"]:
+        return redirect(url_for("index"))
+
     return render_template("import_data.html")
 
 
@@ -493,6 +503,10 @@ def deserialize():
     user_id = session.get("user_id")
     if not user_id:
         return jsonify({"error": "Unauthorized"}), 401
+
+    perms = UserService.get_user_permissions(user_id)
+    if not perms["can_import_data"]:
+        return jsonify({"error": "Импорт данных запрещен настройками вашей группы"}), 403
 
     if "file" in request.files:
         f = request.files["file"]

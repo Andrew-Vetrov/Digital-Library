@@ -12,37 +12,37 @@
         .invite-box { background: #e9ecef; border-radius: 8px; padding: 15px; }
         .search-container { position: relative; }
         #search-results-container {
-        max-height: 185px;
-        overflow-y: scroll !important;
-        overflow-x: hidden;
-        z-index: 1000;
-        position: absolute;
-        width: 100%;
-        top: 100%;
-        left: 0;
-        margin-top: 5px;
-        border: 1px solid #dee2e6;
-        background: white;
-        display: block;
-    }
+            max-height: 185px;
+            overflow-y: scroll !important;
+            overflow-x: hidden;
+            z-index: 1000;
+            position: absolute;
+            width: 100%;
+            top: 100%;
+            left: 0;
+            margin-top: 5px;
+            border: 1px solid #dee2e6;
+            background: white;
+            display: block;
+        }
 
-    #search-results-container::-webkit-scrollbar {
-        width: 8px;
-        display: block;
-    }
+        #search-results-container::-webkit-scrollbar {
+            width: 8px;
+            display: block;
+        }
 
-    #search-results-container::-webkit-scrollbar-track {
-        background: #f8f9fa;
-    }
+        #search-results-container::-webkit-scrollbar-track {
+            background: #f8f9fa;
+        }
 
-    #search-results-container::-webkit-scrollbar-thumb {
-        background: #adb5bd; /* Заметный серый цвет */
-        border-radius: 4px;
-    }
+        #search-results-container::-webkit-scrollbar-thumb {
+            background: #adb5bd;
+            border-radius: 4px;
+        }
 
-    #search-results-container::-webkit-scrollbar-thumb:hover {
-        background: #6c757d;
-    }
+        #search-results-container::-webkit-scrollbar-thumb:hover {
+            background: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -78,6 +78,9 @@
         <div class="col-lg-4">
             <div class="card p-4 social-card mb-4">
                 <h5>➕ Найти друзей</h5>
+
+                <div id="friends-error-alert" class="alert alert-danger d-none py-2 small mb-3" role="alert"></div>
+
                 <div class="search-container mb-2">
                     <input type="text" id="friend-search-input" class="form-control" placeholder="Введите ник пользователя..." autocomplete="off">
                     <div id="search-results-container" class="list-group shadow" style="display: none;"></div>
@@ -178,67 +181,71 @@
     }
 
     async function performSearch(isNewSearch = true) {
-    if (isLoading || (endOfResults && !isNewSearch)) return;
+        if (isLoading || (endOfResults && !isNewSearch)) return;
 
-    const input = document.getElementById('friend-search-input');
-    const container = document.getElementById('search-results-container');
-    const query = input.value.trim();
+        const input = document.getElementById('friend-search-input');
+        const container = document.getElementById('search-results-container');
+        const query = input.value.trim();
 
-    if (query.length < 1) {
-        container.style.display = 'none';
-        container.innerHTML = '';
-        return;
-    }
-
-    if (isNewSearch) {
-        currentPage = 0;
-        endOfResults = false;
-        container.innerHTML = '';
-        currentQuery = query;
-    }
-
-    isLoading = true;
-
-    try {
-        const res = await fetch(`/api/users/search?q=${encodeURIComponent(currentQuery)}&page=${currentPage}`);
-        const users = await res.json();
-
-        if (users.length < 5) endOfResults = true;
-
-        if (users.length === 0 && isNewSearch) {
-            container.innerHTML = '<div class="list-group-item text-muted small">Никого не нашли</div>';
-        } else {
-            users.forEach(user => {
-                const item = document.createElement('div');
-                item.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
-
-                const actionButton = user.already_linked
-                    ? `<button class="btn btn-secondary btn-sm py-0 px-2" disabled style="opacity: 0.6;">✓</button>`
-                    : `<button onclick="sendRequestById(${user.id}, '${user.username}')" class="btn btn-success btn-sm py-0 px-2">+</button>`;
-
-                item.innerHTML = `
-                    <span class="small fw-bold">${user.username}</span>
-                    ${actionButton}
-                `;
-                container.appendChild(item);
-            });
-            currentPage++;
+        if (query.length < 1) {
+            container.style.display = 'none';
+            container.innerHTML = '';
+            return;
         }
-        container.style.display = 'block';
-    } catch (err) {
-        console.error(err);
-    } finally {
-        isLoading = false;
+
+        if (isNewSearch) {
+            currentPage = 0;
+            endOfResults = false;
+            container.innerHTML = '';
+            currentQuery = query;
+        }
+
+        isLoading = true;
+
+        try {
+            const res = await fetch(`/api/users/search?q=${encodeURIComponent(currentQuery)}&page=${currentPage}`);
+            const users = await res.json();
+
+            if (users.length < 5) endOfResults = true;
+
+            if (users.length === 0 && isNewSearch) {
+                container.innerHTML = '<div class="list-group-item text-muted small">Никого не нашли</div>';
+            } else {
+                users.forEach(user => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center py-2';
+
+                    const actionButton = user.already_linked
+                        ? `<button class="btn btn-secondary btn-sm py-0 px-2" disabled style="opacity: 0.6;">✓</button>`
+                        : `<button onclick="sendRequestById(${user.id}, '${user.username}')" class="btn btn-success btn-sm py-0 px-2">+</button>`;
+
+                    item.innerHTML = `
+                        <span class="small fw-bold">${user.username}</span>
+                        ${actionButton}
+                    `;
+                    container.appendChild(item);
+                });
+                currentPage++;
+            }
+            container.style.display = 'block';
+        } catch (err) {
+            console.error(err);
+        } finally {
+            isLoading = false;
+        }
     }
-}
 
     async function sendRequestById(friendId, username) {
+        const errorAlert = document.getElementById('friends-error-alert');
+        if (errorAlert) errorAlert.classList.add('d-none');
+
         try {
             const res = await fetch('/friends/add_by_id', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ friend_id: friendId })
             });
+
             if (res.ok) {
                 showToast(`Запрос отправлен ${username}!`);
                 document.getElementById('search-results-container').style.display = 'none';
@@ -246,10 +253,23 @@
                 location.reload();
             } else {
                 const data = await res.json();
+
+                if (errorAlert) {
+                    errorAlert.innerText = data.error || "Ошибка при отправке запроса";
+                    errorAlert.classList.remove('d-none');
+                }
                 showToast(data.error || "Ошибка", "danger");
+
+                if (res.status === 403) {
+                    document.getElementById('search-results-container').style.display = 'none';
+                }
             }
         } catch (err) {
             showToast("Ошибка сети", "danger");
+            if (errorAlert) {
+                errorAlert.innerText = "Не удалось связаться с сервером. Проверьте сеть.";
+                errorAlert.classList.remove('d-none');
+            }
         }
     }
 

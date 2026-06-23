@@ -86,7 +86,7 @@
                 <a href="/friends" class="btn btn-info btn-sm">Друзья</a>
                 <a href="/achievements" class="btn btn-warning btn-sm">🏆 Достижения</a>
                 <button id="serialize-btn" class="btn btn-outline-warning btn-sm" onclick="downloadUserData()">Скачать данные</button>
-                <a href="/import-data" class="btn btn-outline-warning btn-sm">Импорт данных</a>
+                <a href="/import-data" id="import-data-link" class="btn btn-outline-warning btn-sm">Импорт данных</a>
                 <a href="/sign_out" class="btn btn-outline-light btn-sm">Выход</a>
             </div>
             {% endif %}
@@ -219,12 +219,36 @@
         integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
 
     <script>
-    {% if current_user and current_user.role == 'admin' %}
-    let bsRoleModal;
-    let allUsersRoleCache = [];
-    const currentAdminId = {{ session.get('user_id', 0) }};
+    function showToast(message, type = 'success') {
+        const toastElement = document.getElementById('liveToast');
+        const toastText = document.getElementById('toast-text');
+        if (!toastElement || !toastText) return;
+        toastElement.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastText.innerText = message;
+        new bootstrap.Toast(toastElement).show();
+    }
 
     document.addEventListener("DOMContentLoaded", () => {
+        const importLink = document.getElementById('import-data-link');
+        if (importLink) {
+            importLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const response = await fetch('/import-data', { method: 'HEAD' });
+                    if (response.status === 403) {
+                        showToast("Вам запрещен импорт данных настройками группы", "danger");
+                    } else if (!response.ok) {
+                        showToast("Произошла ошибка при переходе", "danger");
+                    } else {
+                        window.location.href = importLink.href;
+                    }
+                } catch (err) {
+                    showToast("Ошибка сети", "danger");
+                }
+            });
+        }
+
+        {% if current_user and current_user.role == 'admin' %}
         bsRoleModal = new bootstrap.Modal(document.getElementById('roleModal'));
         const searchInput = document.getElementById('role-user-search-input');
         const resultsContainer = document.getElementById('role-user-search-results');
@@ -268,7 +292,13 @@
                 resultsContainer.style.display = 'none';
             }
         });
+        {% endif %}
     });
+
+    {% if current_user and current_user.role == 'admin' %}
+    let bsRoleModal;
+    let allUsersRoleCache = [];
+    const currentAdminId = {{ session.get('user_id', 0) }};
 
     async function openRoleModal() {
         showRoleMainView();
@@ -284,7 +314,7 @@
             allUsersRoleCache = data.all_users || [];
             renderStaffList();
             bsRoleModal.show();
-        } catch (err) { alert(err.message); }
+        } catch (err) { showToast(err.message, "danger"); }
     }
 
     function showRoleMainView() {
@@ -370,10 +400,11 @@
 
                 renderStaffList();
                 showRoleMainView();
+                showToast("Роль успешно изменена", "success");
             } else {
-                alert(result.error || "Не удалось изменить роль");
+                showToast(result.error || "Не удалось изменить роль", "danger");
             }
-        } catch (err) { alert("Ошибка соединения: " + err.message); }
+        } catch (err) { showToast("Ошибка соединения: " + err.message, "danger"); }
     }
     {% endif %}
 
@@ -383,8 +414,22 @@
         btn.textContent = 'Загружаем…';
         try {
             const resp = await fetch('/serialize', { credentials: 'include' });
-            if (!resp.ok) { alert('Ошибка при получении данных'); return; }
-            const data = await resp.json();
+
+            let data = {};
+            try {
+                data = await resp.json();
+            } catch(err) {}
+
+            if (resp.status === 403) {
+                showToast(data.error || 'Вам запрещено скачивать данные настройками группы.', 'danger');
+                return;
+            }
+
+            if (!resp.ok) {
+                showToast(data.error || 'Ошибка при получении данных', 'danger');
+                return;
+            }
+
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -392,8 +437,9 @@
             a.download = `library_backup_${new Date().toISOString().slice(0,10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
+            showToast("Данные успешно экспортированы", "success");
         } catch (e) {
-            alert('Ошибка: ' + e.message);
+            showToast('Ошибка: ' + e.message, 'danger');
         } finally {
             btn.disabled = false;
             btn.textContent = 'Скачать данные';

@@ -114,7 +114,16 @@
                     credentials: 'include',
                     body: formData,
                 });
-                const data = await resp.json();
+
+                let data = {};
+                try {
+                    data = await resp.json();
+                } catch(err) {}
+
+                if (resp.status === 403) {
+                    showAlert('danger', data.error || 'Вам запрещено импортировать данные настройками группы.');
+                    return;
+                }
 
                 if (!resp.ok || !data.success) {
                     showAlert('danger', data.error || 'Произошла ошибка при импорте');

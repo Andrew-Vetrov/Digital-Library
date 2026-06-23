@@ -2,7 +2,7 @@ import hashlib
 import sys
 import psycopg2.extras
 from db import get_connection
-from models.models import User, Friendship, ReadingProgress, Book
+from models.models import User, Friendship, ReadingProgress, Book, Group, GroupMember
 
 class UserService:
     @staticmethod
@@ -118,6 +118,42 @@ class UserService:
                 ids.remove(user_id)
 
             return ids
+
+    @staticmethod
+    def get_user_permissions(user_id):
+        with get_connection() as session:
+            user = session.query(User).get(user_id)
+            if not user:
+                return {
+                    "can_download_data": False, "can_import_data": False, "can_friends": False,
+                    "can_upload_files": False, "can_manage_groups": False
+                }
+
+            if user.role == "admin":
+                return {
+                    "can_download_data": True, "can_import_data": True, "can_friends": True,
+                    "can_upload_files": True, "can_manage_groups": True
+                }
+
+            groups = session.query(Group).join(GroupMember, GroupMember.group_id == Group.id).filter(
+                GroupMember.user_id == user_id).all()
+
+            deny_download = any(g.deny_download_data for g in groups)
+            deny_import = any(g.deny_import_data for g in groups)
+            deny_friend = any(g.deny_friends for g in groups)
+
+            allow_upload = any(g.allow_upload_files for g in groups)
+            allow_manage = any(g.allow_manage_groups for g in groups)
+            allow_manage_books_access = any(g.allow_manage_books_access for g in groups)
+
+            return {
+                "can_download_data": not deny_download,
+                "can_import_data": not deny_import,
+                "can_friends": not deny_friend,
+                "can_upload_files": allow_upload,
+                "can_manage_groups": allow_manage,
+                "can_manage_books_access": allow_manage_books_access
+            }
 
 class FriendService:
     @staticmethod
