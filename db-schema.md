@@ -1,178 +1,212 @@
 # Схема базы данных — Digital Library
 
-ER-диаграмма построена по `app/models/models.py` (SQLAlchemy ORM, PostgreSQL).
-Просмотр: GitHub, VS Code (расширение Mermaid) или любой Mermaid-совместимый рендерер.
+Построено по `app/models/models.py` (SQLAlchemy ORM, PostgreSQL). 15 таблиц.
 
-```mermaid
-erDiagram
-    users ||--o{ favourites        : "имеет"
-    books ||--o{ favourites        : ""
-    users ||--o{ reading_history   : "читал"
-    books ||--o{ reading_history   : ""
-    users ||--o{ reading_progress  : "прогресс"
-    books ||--o{ reading_progress  : ""
-    users ||--o{ search_history    : "искал"
-    users ||--o{ book_ratings      : "оценил"
-    books ||--o{ book_ratings      : ""
-    books ||--o{ bookmarks         : "содержит"
-    books ||--o{ notes             : "содержит"
-    users ||--o{ friendships       : "user_id"
-    users ||--o{ friendships       : "friend_id"
-    users ||--o{ book_access       : "доступ"
-    books ||--o{ book_access       : ""
-    users ||--o{ group_members     : "состоит"
-    groups ||--o{ group_members    : ""
-    groups ||--o{ group_book_access : "открывает"
-    books ||--o{ group_book_access : ""
-    users ||--o{ user_achievements : "получил"
+## Карта связей
 
-    users {
-        int id PK
-        string role "user | moderator | admin"
-        string username UK
-        string email UK
-        string password_hash
-        bool has_read_book_achievement
-        string invite_token UK
-    }
+`USERS` и `BOOKS` — центральные сущности, между ними связующие таблицы.
+Обозначения: `>──` / `──<` — сторона «многие», `( )` — внешние ключи, `*` — поле без FK (связь на уровне приложения).
 
-    books {
-        int id PK
-        bool is_visible_to_all
-        string title
-        float average_rating
-        string author
-        string language
-        string genre
-        string minio_key
-        string cover_key
-        float last_position
-        string cfi
-    }
+```text
+                                  USERS (id)
+                                      │
+      ┌───────────────────────────────┼───────────────────────────────┐
+      │ favourites        (user_id, book_id)                           │
+      │ reading_history   (user_id, book_id)                           │
+      │ reading_progress  (user_id, book_id)                           │
+   ──<│ book_ratings      (user_id, book_id)   [uniq user+book]        │>──  BOOKS (id)
+      │ book_access       (user_id, book_id)                           │
+      │ bookmarks         (book_id ; user_id*)                         │
+      │ notes             (book_id ; user_id*)                         │
+      └───────────────────────────────┬───────────────────────────────┘
+                                      │
+      ┌───────────────────────────────┼─────────────────────────────┐
+   ──<│ search_history    (user_id)                                  │
+      │ friendships       (user_id, friend_id)   [само-связь users]  │
+      │ user_achievements (user_id, code)        [uniq user+code]    │
+      │ group_members     (user_id, group_id)    [uniq group+user]   │>──  GROUPS (id)
+      └──────────────────────────────────────────────────────────────┘
 
-    favourites {
-        int id PK
-        int user_id FK
-        int book_id FK
-    }
-
-    bookmarks {
-        int id PK
-        string title
-        int book_id FK
-        float position
-        string cfi
-        int user_id "логич. → users (без FK)"
-        bool is_shared
-    }
-
-    notes {
-        int id PK
-        string title
-        int book_id FK
-        float position
-        string cfi
-        text selected_text
-        text comment
-        int user_id "логич. → users (без FK)"
-        bool is_shared
-    }
-
-    reading_history {
-        int id PK
-        int user_id FK
-        int book_id FK
-        datetime last_read_at
-        float progress
-    }
-
-    reading_progress {
-        int id PK
-        int user_id FK
-        int book_id FK
-        string cfi
-        float last_position
-    }
-
-    search_history {
-        int id PK
-        int user_id FK
-        text query
-        datetime created_at
-    }
-
-    friendships {
-        int id PK
-        int user_id FK
-        int friend_id FK
-        string status "pending | accepted"
-        datetime created_at
-    }
-
-    book_ratings {
-        int id PK
-        int score
-        int user_id FK
-        int book_id FK
-    }
-
-    book_access {
-        int id PK
-        int book_id FK
-        int user_id FK
-    }
-
-    groups {
-        int id PK
-        string name UK
-        datetime created_at
-        bool deny_download_data
-        bool deny_import_data
-        bool deny_friends
-        bool allow_upload_files
-        bool allow_manage_groups
-        bool allow_manage_books_access
-    }
-
-    group_members {
-        int id PK
-        int group_id FK
-        int user_id FK
-    }
-
-    group_book_access {
-        int id PK
-        int group_id FK
-        int book_id FK
-    }
-
-    user_achievements {
-        int id PK
-        int user_id FK
-        string code
-        datetime created_at
-    }
+        GROUPS (id) ──< group_book_access (group_id, book_id) >── BOOKS (id)
+                         [uniq group+book]
 ```
 
-## Пояснения
+## Связи (текстом)
 
-- **PK** — первичный ключ, **FK** — внешний ключ, **UK** — уникальное поле.
-- **Составные уникальные ограничения** (`UniqueConstraint`):
-  - `book_ratings` — `(user_id, book_id)`: одна оценка пользователя на книгу.
-  - `group_members` — `(group_id, user_id)`: один пользователь в группе один раз.
-  - `group_book_access` — `(group_id, book_id)`: одна запись доступа группы к книге.
-  - `user_achievements` — `(user_id, code)`: ачивка выдаётся один раз.
-- **`bookmarks.user_id` и `notes.user_id`** объявлены как `Integer` **без** `ForeignKey` — связь с `users` логическая (на уровне приложения), а не ограничение БД. На диаграмме показаны для полноты.
-- **Каскады**: связи `users`/`books` → дочерние таблицы помечены `cascade="all, delete-orphan"` в ORM; для `book_access`, групп и `user_achievements` дополнительно задан `ondelete="CASCADE"` на уровне БД.
-- **Доступ к книге** определяется тремя путями: `books.is_visible_to_all`, прямой `book_access`, либо через группу (`group_members` → `group_book_access`).
+| Дочерняя таблица | → users | → books | → groups | Назначение |
+|------------------|:-------:|:-------:|:--------:|------------|
+| favourites | user_id | book_id | — | избранные книги |
+| reading_history | user_id | book_id | — | история чтения |
+| reading_progress | user_id | book_id | — | позиция чтения у пользователя |
+| book_ratings | user_id | book_id | — | оценка (1–5), уник. (user, book) |
+| book_access | user_id | book_id | — | прямой доступ к книге |
+| bookmarks | user_id* | book_id | — | закладки (user_id без FK) |
+| notes | user_id* | book_id | — | заметки (user_id без FK) |
+| search_history | user_id | — | — | история поиска |
+| friendships | user_id, friend_id | — | — | дружба (само-связь users) |
+| user_achievements | user_id | — | — | выданные ачивки, уник. (user, code) |
+| group_members | user_id | — | group_id | состав группы, уник. (group, user) |
+| group_book_access | — | book_id | group_id | доступ группы к книге, уник. (group, book) |
 
-## Группировка таблиц по доменам
+`*` — `user_id` объявлен как `Integer` без `ForeignKey`; связь логическая.
 
-| Домен | Таблицы |
-|-------|---------|
-| Пользователи и книги | `users`, `books` |
-| Чтение | `reading_progress`, `reading_history`, `bookmarks`, `notes`, `favourites` |
-| Социальное | `friendships` |
-| Оценки и поиск | `book_ratings`, `search_history` |
-| Геймификация | `user_achievements` |
-| Доступ и управление | `book_access`, `groups`, `group_members`, `group_book_access` |
+---
+
+## Таблицы и поля
+
+### users
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| role | varchar(20) | | `user` / `moderator` / `admin` |
+| username | varchar(64) | UNIQUE | |
+| email | varchar(64) | UNIQUE | |
+| password_hash | varchar(256) | | sha256 |
+| has_read_book_achievement | bool | | легаси-флаг ачивки |
+| invite_token | varchar(64) | UNIQUE | UUID для приглашений |
+
+### books
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| is_visible_to_all | bool | | публичная книга |
+| title | varchar(255) | | |
+| average_rating | float | | средняя оценка |
+| author | varchar(255) | | |
+| language | varchar(50) | | |
+| genre | varchar(100) | | |
+| minio_key | varchar(255) | | ключ файла в MinIO |
+| cover_key | varchar(255) | | ключ обложки |
+| last_position | float | | |
+| cfi | varchar(500) | | EPUB-позиция |
+
+### favourites
+| Поле | Тип | Ключ |
+|------|-----|------|
+| id | int | PK |
+| user_id | int | FK → users |
+| book_id | int | FK → books |
+
+### bookmarks
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| title | varchar(255) | | |
+| book_id | int | FK → books | |
+| position | float | | |
+| cfi | varchar(500) | | |
+| user_id | int | — | без FK (логич. → users) |
+| is_shared | bool | | видна друзьям |
+
+### notes
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| title | varchar(255) | | |
+| book_id | int | FK → books | |
+| position | float | | |
+| cfi | varchar(500) | | |
+| selected_text | text | | выделенный текст |
+| comment | text | | |
+| user_id | int | — | без FK (логич. → users) |
+| is_shared | bool | | видна друзьям |
+
+### reading_history
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| user_id | int | FK → users | |
+| book_id | int | FK → books | |
+| last_read_at | datetime | | |
+| progress | float | | 0..1 |
+
+### reading_progress
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| user_id | int | FK → users | |
+| book_id | int | FK → books | |
+| cfi | varchar(500) | | |
+| last_position | float | | |
+
+### search_history
+| Поле | Тип | Ключ |
+|------|-----|------|
+| id | int | PK |
+| user_id | int | FK → users |
+| query | text | |
+| created_at | datetime | |
+
+### friendships
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| user_id | int | FK → users | инициатор |
+| friend_id | int | FK → users | получатель |
+| status | varchar(20) | | `pending` / `accepted` |
+| created_at | datetime | | |
+
+### book_ratings
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| score | int | | 1..5 |
+| user_id | int | FK → users | |
+| book_id | int | FK → books | |
+| — | — | UNIQUE (user_id, book_id) | одна оценка на книгу |
+
+### book_access
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| book_id | int | FK → books | ON DELETE CASCADE |
+| user_id | int | FK → users | ON DELETE CASCADE |
+
+### groups
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| name | varchar(120) | UNIQUE | |
+| created_at | datetime | | |
+| deny_download_data | bool | | запрет выгрузки данных |
+| deny_import_data | bool | | запрет импорта |
+| deny_friends | bool | | запрет приглашать в друзья |
+| allow_upload_files | bool | | разрешить загрузку книг |
+| allow_manage_groups | bool | | разрешить управление группами |
+| allow_manage_books_access | bool | | разрешить управление доступом |
+
+### group_members
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| group_id | int | FK → groups | ON DELETE CASCADE |
+| user_id | int | FK → users | ON DELETE CASCADE |
+| — | — | UNIQUE (group_id, user_id) | |
+
+### group_book_access
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| group_id | int | FK → groups | ON DELETE CASCADE |
+| book_id | int | FK → books | ON DELETE CASCADE |
+| — | — | UNIQUE (group_id, book_id) | |
+
+### user_achievements
+| Поле | Тип | Ключ | Примечание |
+|------|-----|------|------------|
+| id | int | PK | |
+| user_id | int | FK → users | ON DELETE CASCADE |
+| code | varchar(64) | | код ачивки из каталога |
+| created_at | datetime | | когда выдана |
+| — | — | UNIQUE (user_id, code) | выдаётся один раз |
+
+---
+
+## Как определяется доступ к книге
+
+Пользователь видит книгу, если выполнено хотя бы одно:
+
+1. `users.role = 'admin'` — видит всё;
+2. `books.is_visible_to_all = true` — книга публичная;
+3. есть запись в `book_access` для этого пользователя;
+4. пользователь состоит в группе (`group_members`), которой выдан доступ (`group_book_access`).
