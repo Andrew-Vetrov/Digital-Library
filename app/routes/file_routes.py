@@ -64,7 +64,7 @@ def upload_file():
     with get_connection() as db_session:
         current_user = db_session.query(User).filter_by(id=uid).first()
 
-        if not current_user or current_user.role != "admin":
+        if not current_user or current_user.role not in ["admin", "moderator"]:
             abort(403, description="Доступ запрещен. Только для администраторов.")
 
     if request.method == "GET":
@@ -166,7 +166,7 @@ def delete_book(book_id):
     
     with get_connection() as db_session:
         current_user = db_session.query(User).filter_by(id=uid).first()
-        if not current_user or current_user.role != "admin":
+        if not current_user or current_user.role not in ["admin", "moderator"]:
             abort(403, description="Доступ запрещен. Только для администраторов.")
 
     BookService.delete_book(book_id)
@@ -196,7 +196,7 @@ def list_files():
             user_ratings = {r.book_id: r.score for r in ratings}
 
             current_user = db_session.query(User).filter_by(id=user_id).first()
-            if current_user and current_user.role == "admin":
+            if current_user and current_user.role in ["admin", "moderator"]:
                 is_admin = True
             else:
                 allowed_book_ids = set(BookService.get_allowed_book_ids(user_id))
@@ -387,7 +387,7 @@ def manage_access(book_id):
 
     with get_connection() as db_session:
         current_user = db_session.query(User).filter_by(id=uid).first()
-        if not current_user or current_user.role != "admin":
+        if not current_user or current_user.role not in ["admin", "moderator"]:
             return jsonify({"error": "Доступ запрещен. Только для администраторов."}), 403
 
         book = db_session.query(Book).filter_by(id=book_id).first()

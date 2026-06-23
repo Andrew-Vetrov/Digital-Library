@@ -21,7 +21,6 @@ from flask_socketio import SocketIO
 app = Flask(__name__)
 app.secret_key = Config().SECRET_KEY
 
-
 app.register_blueprint(auth_bp)
 app.register_blueprint(file_bp)
 app.register_blueprint(favourite_bp)
@@ -39,13 +38,13 @@ init_presence_events(socketio)
 def manage_roles():
     user_id = session.get("user_id")
     user = UserService.get_user_by_id(user_id) if user_id else None
+
     if not user or getattr(user, 'role', None) != 'admin':
-        return jsonify({"error": "Доступ запрещен"}), 403
+        return jsonify({"error": "Доступ разрешен только Администраторам системы"}), 403
 
     if request.method == "GET":
         with get_connection() as db_session:
             users_raw = db_session.query(user.__class__).all()
-
             all_users = [{"id": u.id, "username": u.username, "role": getattr(u, 'role', 'user')} for u in users_raw]
             return jsonify({"all_users": all_users})
 
@@ -54,8 +53,9 @@ def manage_roles():
         target_user_id = data.get("user_id")
         new_role = data.get("role")
 
-        if not target_user_id or new_role not in ['admin', 'user']:
-            return jsonify({"error": "Неверные параметры"}), 400
+        if not target_user_id or new_role not in ['moderator', 'user']:
+            return jsonify(
+                {"error": "Через панель управления можно назначить только роль Модератора или Пользователя"}), 400
 
         if int(target_user_id) == int(user_id):
             return jsonify({"error": "Вы не можете изменить роль самому себе"}), 400
@@ -65,9 +65,13 @@ def manage_roles():
             if not target_user:
                 return jsonify({"error": "Пользователь не найден"}), 404
 
+            if getattr(target_user, 'role', 'user') == 'admin':
+                return jsonify({"error": "Роль Администратора по умолчанию нельзя переопределить через UI"}), 400
+
             target_user.role = new_role
             db_session.commit()
             return jsonify({"success": True})
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -85,15 +89,14 @@ def index():
 
         d["authorized"] = 1
         d["current_user"] = user
-
         d["username"] = user.username if user else None
 
         raw_favorites = FavoriteService.get_favorites(user_id) or []
         raw_recent = BookService.get_recent_books(user_id) or []
 
-        is_admin = user and getattr(user, 'role', None) == 'admin'
+        has_staff_access = user and getattr(user, 'role', None) in ['admin', 'moderator']
 
-        if not is_admin:
+        if not has_staff_access:
             allowed_book_ids = set(BookService.get_allowed_book_ids(user_id) or [])
 
             d["favorites"] = [b for b in raw_favorites if
@@ -109,6 +112,7 @@ def index():
 
     return render_template("index.html", **d)
 
+
 if __name__ == "__main__":
     init_db()
     # Автосоздание стартового админа из .env (ADMIN_EMAIL / ADMIN_PASSWORD).
@@ -116,4 +120,4 @@ if __name__ == "__main__":
     _cfg = Config()
     UserService.ensure_admin_account(_cfg.ADMIN_USERNAME, _cfg.ADMIN_EMAIL, _cfg.ADMIN_PASSWORD)
     create_index()
-    socketio.run(app, host="0.0.0.0", debug=True,  port=3000, allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0", debug=True, port=3000, allow_unsafe_werkzeug=True)
